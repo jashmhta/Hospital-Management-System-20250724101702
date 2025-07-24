@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for Hospital Management System
 # Stage 1: Base
-FROM node:20-alpine AS base
+FROM node:24-alpine AS base
 
 # Install system dependencies
 RUN apk add --no-cache libc6-compat openssl
@@ -37,7 +37,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
 # Stage 4: Production runner
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 
