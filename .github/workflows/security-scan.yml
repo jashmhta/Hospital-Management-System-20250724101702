@@ -111,7 +111,7 @@ jobs:
           args: --severity-threshold=high --all-projects --json > snyk-report.json
       - name: OSSF Scorecard Analysis
         if: matrix.tool == 'ossf-scorecard'
-        uses: ossf/scorecard-action@v2.3.1
+        uses: ossf/scorecard-action@v2.4.2
         with:
           results_file: ossf-scorecard-results.sarif
           results_format: sarif
@@ -167,7 +167,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
       - name: Anchore Grype Scan
         if: matrix.scanner == 'grype'
-        uses: anchore/scan-action@v3
+        uses: anchore/scan-action@v6
         with:
           image: hms-frontend:security-scan
           severity-cutoff: medium
@@ -357,13 +357,13 @@ jobs:
 
           "
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.10.0
+        uses: zaproxy/action-baseline@v0.14.0
         with:
           target: http://localhost:3000
           rules_file_name: .zap/rules.tsv
           cmd_options: -a
       - name: OWASP ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.8.0
+        uses: zaproxy/action-full-scan@v0.12.0
         with:
           target: http://localhost:3000
           rules_file_name: .zap/rules.tsv
