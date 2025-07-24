@@ -401,7 +401,7 @@ jobs:
 
             "
       - name: "\U0001F528 Build Container Image"
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./microservices/${{ matrix.service }}/Dockerfile
@@ -436,7 +436,7 @@ jobs:
           \ }} \\\n  --ci \\\n  --json dive-analysis-${{ matrix.service }}.json\n  \n"
       - name: "\U0001F4E4 Push Container Image"
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./microservices/${{ matrix.service }}/Dockerfile

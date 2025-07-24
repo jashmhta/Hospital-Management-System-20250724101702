@@ -41,7 +41,7 @@ jobs:
           \ ${{ env.TARGET_URL }}\"\necho \"Scan Intensity: ${{ env.SCAN_INTENSITY }}\"\
           \n"
       - name: Run OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.14.0
         with:
           target: ${{ env.TARGET_URL }}
           rules_file_name: .github/workflows/zap-rules.tsv
@@ -63,7 +63,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
       - name: Run OWASP ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.10.0
+        uses: zaproxy/action-full-scan@v0.12.0
         with:
           target: ${{ env.TARGET_URL }}
           rules_file_name: .github/workflows/zap-rules.tsv

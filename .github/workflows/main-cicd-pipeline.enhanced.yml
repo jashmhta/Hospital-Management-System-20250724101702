@@ -73,7 +73,7 @@ jobs:
           languages: javascript,typescript,java
           queries: security-and-quality
       - name: "\U0001F4C8 Upload Coverage Reports"
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info,./microservices/*/target/site/jacoco/jacoco.xml
@@ -109,7 +109,7 @@ jobs:
           \    ;;\n  microservices)\n    npm run test: microservices:coverage\n    ;;\n\
           \  shared)\n    npm run test: shared:coverage\n    ;;\nesac\n"
       - name: "\U0001F4CA Test Results"
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         if: success() || failure()
         with:
           name: Unit Tests (${{ matrix.test-group }})
@@ -160,7 +160,7 @@ jobs:
       - name: "\U0001F9EA API Contract Testing"
         run: npm run test:contracts
       - name: "\U0001F4CA Integration Test Results"
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         if: success() || failure()
         with:
           name: Integration Tests
@@ -227,7 +227,7 @@ jobs:
 
           "
       - name: "\U0001F3E0 Lighthouse CI"
-        uses: treosh/lighthouse-ci-action@v10
+        uses: treosh/lighthouse-ci-action@v12
         with:
           configPath: ./.lighthouserc.js
           uploadArtifacts: true
@@ -257,7 +257,7 @@ jobs:
           "docker build -t hms-app .\ndocker run --rm -v /var/run/docker.sock: /var/run/docker.sock\
           \ \\\n  -v $PWD: /tmp aquasec/trivy:latest image hms-app\n  \n"
       - name: "\U0001F6E1\uFE0F OWASP ZAP Scan"
-        uses: zaproxy/action-full-scan@v0.8.0
+        uses: zaproxy/action-full-scan@v0.12.0
         with:
           target: http://localhost:3000
           rules_file_name: .zap/rules.tsv
@@ -349,7 +349,7 @@ jobs:
       - name: "\U0001F4E5 Checkout Repository"
         uses: actions/checkout@v4
       - name: "\u2699\uFE0F Setup Kubectl"
-        uses: azure/setup-kubectl@v3
+        uses: azure/setup-kubectl@v4
         with:
           version: v1.28.0
       - name: "\U0001F510 Configure Kubernetes"
@@ -378,7 +378,7 @@ jobs:
       - name: "\U0001F4E5 Checkout Repository"
         uses: actions/checkout@v4
       - name: "\u2699\uFE0F Setup Kubectl"
-        uses: azure/setup-kubectl@v3
+        uses: azure/setup-kubectl@v4
         with:
           version: v1.28.0
       - name: "\U0001F510 Configure Kubernetes"
