@@ -129,3 +129,7 @@ prisma/migrations/migration_lock.toml
 *.backup
 *.bak
 core
+
+
+node_modules
+
