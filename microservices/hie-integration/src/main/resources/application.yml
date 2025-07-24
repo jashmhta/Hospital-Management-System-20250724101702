@@ -1,0 +1,393 @@
+# HIE Integration Service Configuration
+# Production-ready configuration with multiple profiles
+
+spring:
+  application:
+    name: hie-integration-service
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hie_integration_db}
+    username: ${DATABASE_USERNAME:hie_user}
+    password: ${DATABASE_PASSWORD:hie_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      idle-timeout: ${DB_IDLE_TIMEOUT:300000}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:20000}
+      max-lifetime: ${DB_MAX_LIFETIME:1200000}
+      leak-detection-threshold: ${DB_LEAK_DETECTION:60000}
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: false
+        enable_lazy_load_no_trans: true
+        jdbc:
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: ${CACHE_TTL:600000}
+      cache-null-values: false
+
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:2}
+      timeout: ${REDIS_TIMEOUT:2000}
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:20}
+          max-idle: ${REDIS_POOL_MAX_IDLE:10}
+          min-idle: ${REDIS_POOL_MIN_IDLE:2}
+          max-wait: ${REDIS_POOL_MAX_WAIT:1000}
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/auth/realms/hms/protocol/openid-connect/certs}
+      client:
+        registration:
+          hie-client:
+            client-id: ${OAUTH2_CLIENT_ID:hie-integration-service}
+            client-secret: ${OAUTH2_CLIENT_SECRET:hie-secret}
+            scope: openid,profile,email
+            authorization-grant-type: client_credentials
+        provider:
+          hie-provider:
+            issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+
+  # Server Configuration
+server:
+  port: ${SERVER_PORT:8084}
+  servlet:
+    context-path: ${CONTEXT_PATH:/hie-integration}
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+  http2:
+    enabled: true
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    fetch-registry: true
+    register-with-eureka: true
+    registry-fetch-interval-seconds: 30
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: 1.0.0
+      environment: ${SPRING_PROFILES_ACTIVE:dev}
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,configprops,mappings,scheduledtasks,caches
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 60s
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
+      environment: ${SPRING_PROFILES_ACTIVE:dev}
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+    ping:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms.hieintegration: ${LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:WARN}
+    org.springframework.web: ${WEB_LOG_LEVEL:WARN}
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${HIBERNATE_LOG_LEVEL:WARN}
+    org.springframework.cache: ${CACHE_LOG_LEVEL:WARN}
+    root: ${ROOT_LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE_PATH:logs/hie-integration-service.log}
+    max-size: ${LOG_FILE_MAX_SIZE:10MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: ${API_DOCS_ENABLED:true}
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: ${SWAGGER_UI_ENABLED:true}
+    try-it-out-enabled: true
+    filter: true
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: true
+  show-login-endpoint: true
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      hie-service:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 5s
+        automatic-transition-from-open-to-half-open-enabled: true
+      external-hie:
+        register-health-indicator: true
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        wait-duration-in-open-state: 60s
+        failure-rate-threshold: 30
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 10s
+
+  retry:
+    instances:
+      hie-service:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - org.springframework.web.client.ResourceAccessException
+      external-hie:
+        max-attempts: 5
+        wait-duration: 2s
+        exponential-backoff-multiplier: 2
+
+  timelimiter:
+    instances:
+      hie-service:
+        timeout-duration: 10s
+        cancel-running-future: true
+      external-hie:
+        timeout-duration: 30s
+        cancel-running-future: true
+
+# HIE Integration Service Specific Configuration
+hie:
+  integration:
+    # Connection Testing
+    connection-test:
+      enabled: ${HIE_CONNECTION_TEST_ENABLED:true}
+      frequency-minutes: ${HIE_CONNECTION_TEST_FREQUENCY:15}
+      timeout-seconds: ${HIE_CONNECTION_TEST_TIMEOUT:30}
+      retry-attempts: ${HIE_CONNECTION_TEST_RETRIES:3}
+      parallel-tests: ${HIE_CONNECTION_TEST_PARALLEL:5}
+
+    # Performance Monitoring
+    performance:
+      metrics-calculation-interval-minutes: ${HIE_PERFORMANCE_METRICS_INTERVAL:60}
+      uptime-threshold-percentage: ${HIE_UPTIME_THRESHOLD:95.0}
+      response-time-threshold-ms: ${HIE_RESPONSE_TIME_THRESHOLD:5000}
+      success-rate-threshold-percentage: ${HIE_SUCCESS_RATE_THRESHOLD:90.0}
+
+    # Data Exchange
+    exchange:
+      max-records-per-request: ${HIE_MAX_RECORDS_PER_REQUEST:1000}
+      default-timeout-seconds: ${HIE_DEFAULT_TIMEOUT:30}
+      max-retries: ${HIE_MAX_RETRIES:3}
+      batch-size: ${HIE_BATCH_SIZE:100}
+      parallel-processing: ${HIE_PARALLEL_PROCESSING:true}
+      thread-pool-size: ${HIE_THREAD_POOL_SIZE:10}
+
+    # Security
+    security:
+      encryption-algorithm: ${HIE_ENCRYPTION_ALGORITHM:AES-256-GCM}
+      key-rotation-days: ${HIE_KEY_ROTATION_DAYS:90}
+      audit-enabled: ${HIE_AUDIT_ENABLED:true}
+      sensitive-data-masking: ${HIE_SENSITIVE_DATA_MASKING:true}
+
+    # External System Integration
+    external:
+      fhir:
+        base-url: ${EXTERNAL_FHIR_BASE_URL:http://localhost:8080/fhir}
+        version: ${EXTERNAL_FHIR_VERSION:R4}
+        timeout-seconds: ${EXTERNAL_FHIR_TIMEOUT:30}
+      hl7:
+        enabled: ${HL7_INTEGRATION_ENABLED:true}
+        default-version: ${HL7_DEFAULT_VERSION:2.5.1}
+        encoding: ${HL7_ENCODING:UTF-8}
+
+    # Feature Flags
+    features:
+      real-time-monitoring: ${HIE_FEATURE_REAL_TIME_MONITORING:true}
+      advanced-analytics: ${HIE_FEATURE_ADVANCED_ANALYTICS:true}
+      auto-failover: ${HIE_FEATURE_AUTO_FAILOVER:true}
+      data-quality-checks: ${HIE_FEATURE_DATA_QUALITY_CHECKS:true}
+      compliance-reporting: ${HIE_FEATURE_COMPLIANCE_REPORTING:true}
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:h2:mem:hie_integration_dev;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+logging:
+  level:
+    com.hospital.hms.hieintegration: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+hie:
+  integration:
+    connection-test:
+      frequency-minutes: 5
+    performance:
+      metrics-calculation-interval-minutes: 10
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:h2:mem:hie_integration_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  cache:
+    type: none
+
+logging:
+  level:
+    com.hospital.hms.hieintegration: DEBUG
+    org.springframework.web: WARN
+    root: WARN
+
+hie:
+  integration:
+    connection-test:
+      enabled: false
+    features:
+      real-time-monitoring: false
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+logging:
+  level:
+    com.hospital.hms.hieintegration: INFO
+    org.hibernate.SQL: WARN
+    root: WARN
+  file:
+    name: /var/log/hie-integration-service/application.log
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+hie:
+  integration:
+    security:
+      audit-enabled: true
+      sensitive-data-masking: true
+    features:
+      compliance-reporting: true

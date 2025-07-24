@@ -1,0 +1,155 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: hms-gateway
+  namespace: hms
+spec:
+  selector:
+    istio: ingressgateway # use Istio default gateway implementation
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*.hms.health"
+      tls:
+        httpsRedirect: true # automatic http -> https redirect
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - "*.hms.health"
+      tls:
+        mode: SIMPLE
+        credentialName: hms-tls-cert # TLS certificate secret name
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: hms-virtual-service
+  namespace: hms
+spec:
+  hosts:
+    - "*.hms.health"
+  gateways:
+    - hms-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/v1/patients
+      route:
+        - destination:
+            host: patient-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/appointments
+      route:
+        - destination:
+            host: appointment-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/billing
+      route:
+        - destination:
+            host: billing-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/pharmacy
+      route:
+        - destination:
+            host: pharmacy-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/laboratory
+      route:
+        - destination:
+            host: laboratory-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/radiology
+      route:
+        - destination:
+            host: radiology-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/ipd
+      route:
+        - destination:
+            host: ipd-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/opd
+      route:
+        - destination:
+            host: opd-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/analytics
+      route:
+        - destination:
+            host: analytics-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/cdss
+      route:
+        - destination:
+            host: cdss-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1/auth
+      route:
+        - destination:
+            host: auth-service
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /api/v1
+      route:
+        - destination:
+            host: api-gateway
+            port:
+              number: 80
+          weight: 100
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: frontend-service
+            port:
+              number: 80
+          weight: 100

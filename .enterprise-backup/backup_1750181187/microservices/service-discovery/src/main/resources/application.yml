@@ -1,0 +1,299 @@
+server:
+  port: ${SERVER_PORT:8761}
+  servlet:
+    context-path: /
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 20
+
+spring:
+  application:
+    name: hms-service-discovery
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:development}
+
+  security:
+    user:
+      name: ${EUREKA_USER:eureka-admin}
+      password: ${EUREKA_PASSWORD:hms-eureka-secure-2024}
+      roles: ADMIN
+
+  cloud:
+    config:
+      enabled: ${CONFIG_SERVER_ENABLED:false}
+      uri: ${CONFIG_SERVER_URI:http://localhost:8888}
+      fail-fast: false
+    loadbalancer:
+      ribbon:
+        enabled: false
+
+  sleuth:
+    zipkin:
+      base-url: ${ZIPKIN_BASE_URL:http://localhost:9411}
+    sampler:
+      probability: ${SLEUTH_SAMPLE_RATE:0.1}
+
+eureka:
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: ${EUREKA_INSTANCE_PREFER_IP:false}
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 20
+    metadata-map:
+      version: "@project.version@"
+      description: "Service Discovery and Registry Server"
+      startup-time: ${spring.application.name:}:${spring.profiles.active:}:${server.port:}:${random.value}
+
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+    eureka-server-connect-timeout-seconds: 15
+    eureka-server-read-timeout-seconds: 15
+    eureka-connection-idle-timeout-seconds: 30
+    heartbeat-executor-thread-pool-size: 5
+    cache-refresh-executor-thread-pool-size: 5
+
+  server:
+    # Disable self-preservation mode in development
+    enable-self-preservation: ${EUREKA_SELF_PRESERVATION:true}
+    eviction-interval-timer-in-ms: 4000
+    renewal-percent-threshold: 0.85
+    renewal-threshold-update-interval-ms: 900000
+    expected-number-of-clients-sending-renews: 1
+    response-cache-auto-expiration-in-seconds: 180
+    response-cache-update-interval-ms: 30000
+    use-read-only-response-cache: true
+    delta-retention-timer-interval-in-ms: 30000
+    retention-time-in-m-s-in-delta-queue: 180000
+    peer-eureka-nodes-update-interval-ms: 600000
+    peer-eureka-status-refresh-time-interval-ms: 30000
+
+    # Security
+    enable-replicated-request-compression: true
+    json-codec-name: "JacksonJson"
+    xml-codec-name: "JacksonXml"
+
+    # Rate limiting
+    rate-limiter-enabled: true
+    rate-limiter-burst-size: 10
+    rate-limiter-registry-fetch-average-rate: 500
+    rate-limiter-full-fetch-average-rate: 100
+
+  dashboard:
+    enabled: true
+    path: /
+
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,eureka,env,configprops,loggers
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+    eureka:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        eureka.server.requests: true
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+  health:
+    eureka:
+      enabled: true
+
+# Application Information
+info:
+  app:
+    name: "@project.name@"
+    description: "@project.description@"
+    version: "@project.version@"
+    encoding: "@project.build.sourceEncoding@"
+    java:
+      version: "@java.version@"
+  eureka:
+    server:
+      version: "Netflix Eureka Server"
+      dashboard-url: http://${eureka.instance.hostname}:${server.port}/
+      apps-url: http://${eureka.instance.hostname}:${server.port}/eureka/apps
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms: ${LOG_LEVEL:INFO}
+    com.netflix.eureka: ${EUREKA_LOG_LEVEL:INFO}
+    com.netflix.discovery: ${DISCOVERY_LOG_LEVEL:INFO}
+    org.springframework.cloud.netflix.eureka: ${EUREKA_CLIENT_LOG_LEVEL:INFO}
+    org.springframework.security: WARN
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: logs/service-discovery.log
+    max-size: 100MB
+    max-history: 30
+
+# Environment specific configurations
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  security:
+    user:
+      name: ${EUREKA_USER:admin}
+      password: ${EUREKA_PASSWORD:securePassword123!}
+
+eureka:
+  instance:
+    hostname: service-discovery
+    prefer-ip-address: true
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:admin}:${EUREKA_PASSWORD:securePassword123!}@service-discovery:8761/eureka/
+
+---
+spring:
+  config:
+    activate:
+      on-profile: cluster
+  security:
+    user:
+      name: ${EUREKA_USER:admin}
+      password: ${EUREKA_PASSWORD:clusterPassword123!}
+
+eureka:
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:eureka-server-1}
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_CLUSTER_NODES:http://eureka-server-1:8761/eureka/,http://eureka-server-2:8762/eureka/,http://eureka-server-3:8763/eureka/}
+  server:
+    enable-self-preservation: true
+    expected-number-of-clients-sending-renews: 3
+
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+  security:
+    user:
+      name: ${EUREKA_USER:admin}
+      password: ${EUREKA_PASSWORD:strongProductionPassword123!}
+
+eureka:
+  instance:
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+  server:
+    enable-self-preservation: true
+    eviction-interval-timer-in-ms: 10000
+    renewal-percent-threshold: 0.85
+    response-cache-auto-expiration-in-seconds: 300
+
+logging:
+  level:
+    com.hospital.hms: INFO
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+
+management:
+  endpoint:
+    health:
+      show-details: when-authorized
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,eureka
+
+---
+spring:
+  config:
+    activate:
+      on-profile: development
+
+eureka:
+  server:
+    enable-self-preservation: false
+    eviction-interval-timer-in-ms: 2000
+
+logging:
+  level:
+    com.hospital.hms: DEBUG
+    com.netflix.eureka: DEBUG
+    com.netflix.discovery: DEBUG
+    org.springframework.cloud.netflix.eureka: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+eureka:
+  client:
+    enabled: false
+  server:
+    enable-self-preservation: false
+
+---
+# HMS-specific Healthcare Service Discovery Configuration
+hms:
+  service-discovery:
+    monitoring:
+      enabled: true
+      health-check-interval: 30s
+      metrics-collection-interval: 60s
+      critical-services-check-interval: 15s
+    security:
+      authentication-required: true
+      jwt-secret: ${JWT_SECRET:hms-service-discovery-jwt-secret-key-2024}
+      jwt-expiration: 86400000 # 24 hours
+    cluster:
+      high-availability: ${HA_ENABLED:false}
+      peer-urls: ${EUREKA_PEER_URLS:}
+      sync-timeout: 30000
+    healthcare:
+      critical-services:
+        - patient-management
+        - emergency-service
+        - clinical-documentation
+        - pharmacy-service
+        - billing-service
+        - appointment-scheduling
+      compliance:
+        hipaa-validation: true
+        audit-logging: true
+        data-encryption: true
+        security-scanning: true
+      monitoring:
+        service-health-threshold: 0.8
+        critical-service-alert-threshold: 0.5
+        performance-metrics-enabled: true

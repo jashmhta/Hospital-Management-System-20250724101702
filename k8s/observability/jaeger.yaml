@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+---
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: jaeger
+  namespace: observability
+spec:
+  strategy: production
+  ingress:
+    enabled: true
+    hosts:
+      - jaeger.hms.local
+    annotations:
+      kubernetes.io/ingress.class: istio
+  storage:
+    type: elasticsearch
+    options:
+      es:
+        server-urls: https://elasticsearch-master.observability.svc:9200
+        tls:
+          ca: /es/certificates/ca.crt
+        version: 7
+    secretName: jaeger-es-secret
+  query:
+    replicas: 2
+    resources:
+      limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+    serviceType: ClusterIP
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - query
+              topologyKey: kubernetes.io/hostname
+  collector:
+    replicas: 3
+    resources:
+      limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - collector
+              topologyKey: kubernetes.io/hostname
+  agent:
+    strategy: DaemonSet
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-sampling-config
+  namespace: observability
+data:
+  sampling.json: |
+    {
+      "default_strategy": {
+        "type": "probabilistic",
+        "param": 1.0
+      },
+      "service_strategies": [
+        {
+          "service": "patient-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "billing-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "pharmacy-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "analytics-service",
+          "type": "probabilistic",
+          "param": 0.5
+        },
+        {
+          "service": "authentication-service",
+          "type": "probabilistic",
+          "param": 0.3
+        },
+        {
+          "service": "frontend-web",
+          "type": "probabilistic",
+          "param": 0.1
+        }
+      ],
+      "operation_strategies": [
+        {
+          "service": "frontend-web",
+          "operation": "/api/health",
+          "type": "probabilistic",
+          "param": 0.01
+        },
+        {
+          "service": "patient-service",
+          "operation": "/api/patients/search",
+          "type": "probabilistic",
+          "param": 0.5
+        }
+      ]
+    }

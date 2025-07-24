@@ -1,0 +1,29 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "shlokam-hms" # Use name from HEAD
+main = ".open-next/worker.js" # Use OpenNextJS entry point from origin/master
+compatibility_date = "2024-09-23" # Use newer date from origin/master
+compatibility_flags = ["nodejs_compat"] # From origin/master
+
+[assets]
+directory = ".open-next/assets" # From origin/master
+binding = "ASSETS" # From origin/master
+
+[[d1_databases]]
+binding = "DB" # Consistent binding name
+database_name = "hms-db" # Consistent database name
+database_id = "local-hms-db" # Use specific local ID from origin/master
+preview_database_id = "" # Optional: for use with wrangler dev --remote (from HEAD)
+
+# Optional: Environment variables (if needed)
+# [vars]
+# MY_VAR = "my-value"
+
+# Optional: KV Namespaces, R2 Buckets, etc.
+# [[kv_namespaces]]
+# binding = "MY_KV"
+# id = "your_kv_namespace_id"
+
+# [[r2_buckets]]
+# binding = "MY_BUCKET"
+# bucket_name = "your_bucket_name"
+

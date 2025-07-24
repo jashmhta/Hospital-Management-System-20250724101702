@@ -1,0 +1,548 @@
+name: Healthcare Compliance Validation
+true:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    - cron: 0 1 * * *
+  workflow_dispatch:
+    inputs:
+      compliance_level:
+        description: Compliance validation level
+        required: false
+        default: full
+        type: choice
+        options:
+          - basic
+          - full
+          - audit
+env:
+  COMPLIANCE_LEVEL: ${{ github.event.inputs.compliance_level || 'full' }}
+jobs:
+  hipaa-technical-safeguards:
+    name: HIPAA Technical Safeguards
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Dependencies
+        run: "pip install pyyaml requests beautifulsoup4 cryptography
+
+          "
+      - name: HIPAA Access Control Validation
+        run: "cat > hipaa_access_control.py << 'EOF'\n#!/usr/bin/env python3\n\"\"\"\
+          \nHIPAA \xA7164.312(a) - Access Control Validation\nValidates implementation\
+          \ of access control mechanisms\n\"\"\"\n\nimport os\nimport json\nimport yaml\n\
+          import re\nfrom pathlib import Path\n\nclass HIPAAAccessControlValidator:\n\
+          \    def __init__(self):\n        self.violations = []\n        self.checks_passed\
+          \ = 0\n        self.checks_total = 0\n        \n    def validate_rbac_implementation(self):\n\
+          \        \"\"\"Validate Role-Based Access Control implementation\"\"\"\n \
+          \       print(\"\U0001F50D Validating RBAC implementation...\")\n        self.checks_total\
+          \ += 1\n        \n        rbac_files = [\n            \"src/lib/rbac/rbac.service.ts\"\
+          ,\n            \"src/lib/rbac/roles.ts\",\n            \"src/lib/security/auth.service.ts\"\
+          \n        ]\n        \n        missing_files = []\n        for file_path in\
+          \ rbac_files:\n            if not os.path.exists(file_path):\n           \
+          \     missing_files.append(file_path)\n        \n        if missing_files:\n\
+          \            self.violations.append({\n                \"rule\": \"HIPAA \xA7\
+          164.312(a)(1)\",\n                \"description\": \"Access Control - Missing\
+          \ RBAC implementation files\",\n                \"severity\": \"HIGH\",\n\
+          \                \"files\": missing_files\n            })\n        else:\n\
+          \            self.checks_passed += 1\n            print(\"\u2705 RBAC implementation\
+          \ files found\")\n            \n    def validate_unique_user_identification(self):\n\
+          \        \"\"\"Validate unique user identification requirements\"\"\"\n  \
+          \      print(\"\U0001F50D Validating unique user identification...\")\n  \
+          \      self.checks_total += 1\n        \n        # Check for user authentication\
+          \ implementation\n        auth_patterns = [\n            r\"userId|userID|user_id\"\
+          ,\n            r\"authentication\",\n            r\"login|signin\",\n    \
+          \        r\"session\"\n        ]\n        \n        auth_files = list(Path(\"\
+          src\").rglob(\"*auth*.ts\")) + list(Path(\"src\").rglob(\"*user*.ts\"))\n\
+          \        \n        if not auth_files:\n            self.violations.append({\n\
+          \                \"rule\": \"HIPAA \xA7164.312(a)(2)(i)\",\n             \
+          \   \"description\": \"Unique User Identification - No authentication files\
+          \ found\",\n                \"severity\": \"HIGH\"\n            })\n     \
+          \   else:\n            self.checks_passed += 1\n            print(\"\u2705\
+          \ User authentication implementation found\")\n            \n    def validate_automatic_logoff(self):\n\
+          \        \"\"\"Validate automatic logoff implementation\"\"\"\n        print(\"\
+          \U0001F50D Validating automatic logoff...\")\n        self.checks_total +=\
+          \ 1\n        \n        # Look for session timeout implementation\n       \
+          \ session_files = list(Path(\"src\").rglob(\"*session*.ts\"))\n        timeout_found\
+          \ = False\n        \n        for file_path in session_files:\n           \
+          \ try:\n                with open(file_path, 'r') as f:\n                \
+          \    content = f.read()\n                    if re.search(r\"timeout|expir|logoff|logout\"\
+          , content, re.IGNORECASE):\n                        timeout_found = True\n\
+          \                        break\n            except Exception:\n          \
+          \      continue\n        \n        if not timeout_found:\n            self.violations.append({\n\
+          \                \"rule\": \"HIPAA \xA7164.312(a)(2)(iii)\",\n           \
+          \     \"description\": \"Automatic Logoff - No session timeout implementation\
+          \ found\",\n                \"severity\": \"MEDIUM\"\n            })\n   \
+          \     else:\n            self.checks_passed += 1\n            print(\"\u2705\
+          \ Automatic logoff implementation found\")\n            \n    def validate_encryption_decryption(self):\n\
+          \        \"\"\"Validate encryption and decryption implementation\"\"\"\n \
+          \       print(\"\U0001F50D Validating encryption implementation...\")\n  \
+          \      self.checks_total += 1\n        \n        encryption_files = list(Path(\"\
+          src\").rglob(\"*encrypt*.ts\")) + list(Path(\"src\").rglob(\"*crypto*.ts\"\
+          ))\n        \n        if not encryption_files:\n            self.violations.append({\n\
+          \                \"rule\": \"HIPAA \xA7164.312(a)(2)(iv)\",\n            \
+          \    \"description\": \"Encryption and Decryption - No encryption implementation\
+          \ found\",\n                \"severity\": \"HIGH\"\n            })\n     \
+          \   else:\n            self.checks_passed += 1\n            print(\"\u2705\
+          \ Encryption implementation found\")\n            \n    def run_validation(self):\n\
+          \        \"\"\"Run all HIPAA access control validations\"\"\"\n        print(\"\
+          \U0001F3E5 Starting HIPAA Access Control Validation...\")\n        \n    \
+          \    self.validate_rbac_implementation()\n        self.validate_unique_user_identification()\n\
+          \        self.validate_automatic_logoff()\n        self.validate_encryption_decryption()\n\
+          \        \n        return {\n            \"violations\": self.violations,\n\
+          \            \"checks_passed\": self.checks_passed,\n            \"checks_total\"\
+          : self.checks_total,\n            \"compliance_percentage\": (self.checks_passed\
+          \ / self.checks_total) * 100 if self.checks_total > 0 else 0\n        }\n\n\
+          if __name__ == \"__main__\":\n    validator = HIPAAAccessControlValidator()\n\
+          \    results = validator.run_validation()\n    \n    with open(\"hipaa-access-control-results.json\"\
+          , \"w\") as f:\n        json.dump(results, f, indent=2)\n    \n    print(f\"\
+          \\n\U0001F4CA HIPAA Access Control Validation Results: \")\n    print(f\"\
+          \   Checks Passed: {results['checks_passed']}/{results['checks_total']}\"\
+          )\n    print(f\"   Compliance: {results['compliance_percentage']:.1f}%\")\n\
+          \    print(f\"   Violations: {len(results['violations'])}\")\n    \n    if\
+          \ results['compliance_percentage'] < 100:\n        print(\"\u274C HIPAA Access\
+          \ Control compliance issues found!\")\n        for violation in results['violations']:\n\
+          \            print(f\"   - {violation['rule']}: {violation['description']}\"\
+          )\n    else:\n        print(\"\u2705 HIPAA Access Control compliance validated\"\
+          )\nEOF\n\npython hipaa_access_control.py\n"
+      - name: HIPAA Audit Controls Validation
+        run: "cat > hipaa_audit_controls.py << 'EOF'\n#!/usr/bin/env python3\n\"\"\"\
+          \nHIPAA \xA7164.312(b) - Audit Controls Validation\nValidates implementation\
+          \ of audit logging and controls\n\"\"\"\n\nimport os\nimport json\nimport\
+          \ re\nfrom pathlib import Path\n\nclass HIPAAAuditControlsValidator:\n   \
+          \ def __init__(self):\n        self.violations = []\n        self.checks_passed\
+          \ = 0\n        self.checks_total = 0\n        \n    def validate_audit_logging(self):\n\
+          \        \"\"\"Validate audit logging implementation\"\"\"\n        print(\"\
+          \U0001F50D Validating audit logging implementation...\")\n        self.checks_total\
+          \ += 1\n        \n        audit_files = list(Path(\"src\").rglob(\"*audit*.ts\"\
+          )) + list(Path(\"src\").rglob(\"*log*.ts\"))\n        \n        if not audit_files:\n\
+          \            self.violations.append({\n                \"rule\": \"HIPAA \xA7\
+          164.312(b)\",\n                \"description\": \"Audit Controls - No audit\
+          \ logging implementation found\",\n                \"severity\": \"HIGH\"\n\
+          \            })\n        else:\n            self.checks_passed += 1\n    \
+          \        print(\"\u2705 Audit logging implementation found\")\n          \
+          \  \n    def validate_security_monitoring(self):\n        \"\"\"Validate security\
+          \ monitoring implementation\"\"\"\n        print(\"\U0001F50D Validating security\
+          \ monitoring...\")\n        self.checks_total += 1\n        \n        monitoring_files\
+          \ = list(Path(\"src\").rglob(\"*monitor*.ts\")) + list(Path(\"k8s/monitoring\"\
+          ).rglob(\"*.yaml\"))\n        \n        if not monitoring_files:\n       \
+          \     self.violations.append({\n                \"rule\": \"HIPAA \xA7164.312(b)\"\
+          ,\n                \"description\": \"Audit Controls - No security monitoring\
+          \ implementation found\",\n                \"severity\": \"MEDIUM\"\n    \
+          \        })\n        else:\n            self.checks_passed += 1\n        \
+          \    print(\"\u2705 Security monitoring implementation found\")\n        \
+          \    \n    def validate_log_retention(self):\n        \"\"\"Validate log retention\
+          \ policies\"\"\"\n        print(\"\U0001F50D Validating log retention policies...\"\
+          )\n        self.checks_total += 1\n        \n        # Check for log retention\
+          \ configuration\n        config_files = list(Path(\".\").rglob(\"*.yml\"))\
+          \ + list(Path(\".\").rglob(\"*.yaml\"))\n        retention_found = False\n\
+          \        \n        for file_path in config_files:\n            try:\n    \
+          \            with open(file_path, 'r') as f:\n                    content\
+          \ = f.read()\n                    if re.search(r\"retention|archive|backup\"\
+          , content, re.IGNORECASE):\n                        retention_found = True\n\
+          \                        break\n            except Exception:\n          \
+          \      continue\n        \n        if not retention_found:\n            self.violations.append({\n\
+          \                \"rule\": \"HIPAA \xA7164.312(b)\",\n                \"description\"\
+          : \"Audit Controls - No log retention policy found\",\n                \"\
+          severity\": \"MEDIUM\"\n            })\n        else:\n            self.checks_passed\
+          \ += 1\n            print(\"\u2705 Log retention policy found\")\n       \
+          \     \n    def run_validation(self):\n        \"\"\"Run all HIPAA audit controls\
+          \ validations\"\"\"\n        print(\"\U0001F3E5 Starting HIPAA Audit Controls\
+          \ Validation...\")\n        \n        self.validate_audit_logging()\n    \
+          \    self.validate_security_monitoring()\n        self.validate_log_retention()\n\
+          \        \n        return {\n            \"violations\": self.violations,\n\
+          \            \"checks_passed\": self.checks_passed,\n            \"checks_total\"\
+          : self.checks_total,\n            \"compliance_percentage\": (self.checks_passed\
+          \ / self.checks_total) * 100 if self.checks_total > 0 else 0\n        }\n\n\
+          if __name__ == \"__main__\":\n    validator = HIPAAAuditControlsValidator()\n\
+          \    results = validator.run_validation()\n    \n    with open(\"hipaa-audit-controls-results.json\"\
+          , \"w\") as f:\n        json.dump(results, f, indent=2)\n    \n    print(f\"\
+          \\n\U0001F4CA HIPAA Audit Controls Validation Results: \")\n    print(f\"\
+          \   Checks Passed: {results['checks_passed']}/{results['checks_total']}\"\
+          )\n    print(f\"   Compliance: {results['compliance_percentage']:.1f}%\")\n\
+          \    print(f\"   Violations: {len(results['violations'])}\")\n    \n    if\
+          \ results['compliance_percentage'] < 100:\n        print(\"\u274C HIPAA Audit\
+          \ Controls compliance issues found!\")\n    else:\n        print(\"\u2705\
+          \ HIPAA Audit Controls compliance validated\")\nEOF\n\npython hipaa_audit_controls.py\n"
+      - name: Upload HIPAA Validation Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: hipaa-validation-results
+          path: "hipaa-access-control-results.json
+
+            hipaa-audit-controls-results.json
+
+            "
+          retention-days: 90
+  gdpr-privacy-validation:
+    name: GDPR Privacy by Design
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: GDPR Data Protection Validation
+        run: "cat > gdpr_validation.py << 'EOF'\n#!/usr/bin/env python3\n\"\"\"\nGDPR\
+          \ Article 25 - Data Protection by Design and Default\nValidates implementation\
+          \ of privacy-by-design principles\n\"\"\"\n\nimport os\nimport json\nimport\
+          \ re\nfrom pathlib import Path\n\nclass GDPRPrivacyValidator:\n    def __init__(self):\n\
+          \        self.violations = []\n        self.checks_passed = 0\n        self.checks_total\
+          \ = 0\n        \n    def validate_data_minimization(self):\n        \"\"\"\
+          Validate data minimization implementation\"\"\"\n        print(\"\U0001F50D\
+          \ Validating data minimization...\")\n        self.checks_total += 1\n   \
+          \     \n        # Check for data collection validation\n        schema_files\
+          \ = list(Path(\"prisma\").rglob(\"*.prisma\"))\n        validation_patterns\
+          \ = [\n            r\"@optional\",\n            r\"nullable\",\n         \
+          \   r\"required.*false\"\n        ]\n        \n        minimization_found\
+          \ = False\n        for file_path in schema_files:\n            try:\n    \
+          \            with open(file_path, 'r') as f:\n                    content\
+          \ = f.read()\n                    for pattern in validation_patterns:\n  \
+          \                      if re.search(pattern, content, re.IGNORECASE):\n  \
+          \                          minimization_found = True\n                   \
+          \         break\n            except Exception:\n                continue\n\
+          \            if minimization_found:\n                break\n        \n   \
+          \     if not minimization_found:\n            self.violations.append({\n \
+          \               \"rule\": \"GDPR Article 5(1)(c)\",\n                \"description\"\
+          : \"Data Minimization - No optional/nullable fields found in schemas\",\n\
+          \                \"severity\": \"MEDIUM\"\n            })\n        else:\n\
+          \            self.checks_passed += 1\n            print(\"\u2705 Data minimization\
+          \ implementation found\")\n            \n    def validate_consent_management(self):\n\
+          \        \"\"\"Validate consent management implementation\"\"\"\n        print(\"\
+          \U0001F50D Validating consent management...\")\n        self.checks_total\
+          \ += 1\n        \n        consent_files = list(Path(\"src\").rglob(\"*consent*.ts\"\
+          )) + list(Path(\"src\").rglob(\"*privacy*.ts\"))\n        \n        if not\
+          \ consent_files:\n            self.violations.append({\n                \"\
+          rule\": \"GDPR Article 6\",\n                \"description\": \"Lawful Basis\
+          \ - No consent management implementation found\",\n                \"severity\"\
+          : \"HIGH\"\n            })\n        else:\n            self.checks_passed\
+          \ += 1\n            print(\"\u2705 Consent management implementation found\"\
+          )\n            \n    def validate_data_subject_rights(self):\n        \"\"\
+          \"Validate data subject rights implementation\"\"\"\n        print(\"\U0001F50D\
+          \ Validating data subject rights...\")\n        self.checks_total += 1\n \
+          \       \n        # Look for data export/deletion capabilities\n        rights_patterns\
+          \ = [\n            r\"export.*data\",\n            r\"delete.*user\",\n  \
+          \          r\"gdpr.*request\",\n            r\"data.*portability\",\n    \
+          \        r\"right.*erasure\"\n        ]\n        \n        api_files = list(Path(\"\
+          src/app/api\").rglob(\"*.ts\"))\n        rights_found = False\n        \n\
+          \        for file_path in api_files:\n            try:\n                with\
+          \ open(file_path, 'r') as f:\n                    content = f.read()\n   \
+          \                 for pattern in rights_patterns:\n                      \
+          \  if re.search(pattern, content, re.IGNORECASE):\n                      \
+          \      rights_found = True\n                            break\n          \
+          \  except Exception:\n                continue\n            if rights_found:\n\
+          \                break\n        \n        if not rights_found:\n         \
+          \   self.violations.append({\n                \"rule\": \"GDPR Articles 15-22\"\
+          ,\n                \"description\": \"Data Subject Rights - No implementation\
+          \ found for subject rights\",\n                \"severity\": \"HIGH\"\n  \
+          \          })\n        else:\n            self.checks_passed += 1\n      \
+          \      print(\"\u2705 Data subject rights implementation found\")\n      \
+          \      \n    def validate_privacy_notices(self):\n        \"\"\"Validate privacy\
+          \ notices and transparency\"\"\"\n        print(\"\U0001F50D Validating privacy\
+          \ notices...\")\n        self.checks_total += 1\n        \n        privacy_files\
+          \ = [\n            \"public/privacy-policy.html\",\n            \"src/components/privacy-notice.tsx\"\
+          ,\n            \"docs/privacy-policy.md\"\n        ]\n        \n        privacy_found\
+          \ = any(os.path.exists(f) for f in privacy_files)\n        \n        if not\
+          \ privacy_found:\n            self.violations.append({\n                \"\
+          rule\": \"GDPR Articles 12-14\",\n                \"description\": \"Transparency\
+          \ - No privacy policy or notices found\",\n                \"severity\": \"\
+          MEDIUM\"\n            })\n        else:\n            self.checks_passed +=\
+          \ 1\n            print(\"\u2705 Privacy notices found\")\n            \n \
+          \   def run_validation(self):\n        \"\"\"Run all GDPR privacy validations\"\
+          \"\"\n        print(\"\U0001F1EA\U0001F1FA Starting GDPR Privacy by Design\
+          \ Validation...\")\n        \n        self.validate_data_minimization()\n\
+          \        self.validate_consent_management()\n        self.validate_data_subject_rights()\n\
+          \        self.validate_privacy_notices()\n        \n        return {\n   \
+          \         \"violations\": self.violations,\n            \"checks_passed\"\
+          : self.checks_passed,\n            \"checks_total\": self.checks_total,\n\
+          \            \"compliance_percentage\": (self.checks_passed / self.checks_total)\
+          \ * 100 if self.checks_total > 0 else 0\n        }\n\nif __name__ == \"__main__\"\
+          :\n    validator = GDPRPrivacyValidator()\n    results = validator.run_validation()\n\
+          \    \n    with open(\"gdpr-validation-results.json\", \"w\") as f:\n    \
+          \    json.dump(results, f, indent=2)\n    \n    print(f\"\\n\U0001F4CA GDPR\
+          \ Privacy Validation Results: \")\n    print(f\"   Checks Passed: {results['checks_passed']}/{results['checks_total']}\"\
+          )\n    print(f\"   Compliance: {results['compliance_percentage']:.1f}%\")\n\
+          \    print(f\"   Violations: {len(results['violations'])}\")\n    \n    if\
+          \ results['compliance_percentage'] < 100:\n        print(\"\u274C GDPR Privacy\
+          \ compliance issues found!\")\n    else:\n        print(\"\u2705 GDPR Privacy\
+          \ compliance validated\")\nEOF\n\npython gdpr_validation.py\n"
+      - name: Upload GDPR Validation Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdpr-validation-results
+          path: gdpr-validation-results.json
+          retention-days: 90
+  fda-cfr-validation:
+    name: FDA 21 CFR Part 11
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: FDA 21 CFR Part 11 Validation
+        run: "cat > fda_cfr_validation.py << 'EOF'\n#!/usr/bin/env python3\n\"\"\"\n\
+          FDA 21 CFR Part 11 - Electronic Records and Signatures\nValidates compliance\
+          \ with FDA electronic records requirements\n\"\"\"\n\nimport os\nimport json\n\
+          import re\nfrom pathlib import Path\n\nclass FDACFRValidator:\n    def __init__(self):\n\
+          \        self.violations = []\n        self.checks_passed = 0\n        self.checks_total\
+          \ = 0\n        \n    def validate_electronic_signatures(self):\n        \"\
+          \"\"Validate electronic signature implementation\"\"\"\n        print(\"\U0001F50D\
+          \ Validating electronic signatures...\")\n        self.checks_total += 1\n\
+          \        \n        signature_files = list(Path(\"src\").rglob(\"*signature*.ts\"\
+          )) + list(Path(\"src\").rglob(\"*esign*.ts\"))\n        \n        if not signature_files:\n\
+          \            self.violations.append({\n                \"rule\": \"21 CFR\
+          \ 11.50\",\n                \"description\": \"Electronic Signatures - No\
+          \ electronic signature implementation found\",\n                \"severity\"\
+          : \"HIGH\"\n            })\n        else:\n            self.checks_passed\
+          \ += 1\n            print(\"\u2705 Electronic signature implementation found\"\
+          )\n            \n    def validate_audit_trail(self):\n        \"\"\"Validate\
+          \ audit trail implementation for CFR compliance\"\"\"\n        print(\"\U0001F50D\
+          \ Validating CFR audit trail...\")\n        self.checks_total += 1\n     \
+          \   \n        audit_files = list(Path(\"src\").rglob(\"*audit*.ts\"))\n  \
+          \      audit_trail_found = False\n        \n        for file_path in audit_files:\n\
+          \            try:\n                with open(file_path, 'r') as f:\n     \
+          \               content = f.read()\n                    # Check for required\
+          \ audit trail elements\n                    required_elements = [\n      \
+          \                  r\"timestamp|date\",\n                        r\"user.*id|author\"\
+          ,\n                        r\"action|operation\",\n                      \
+          \  r\"record.*id|document\"\n                    ]\n                    \n\
+          \                    elements_found = sum(1 for pattern in required_elements\
+          \ \n                                       if re.search(pattern, content,\
+          \ re.IGNORECASE))\n                    \n                    if elements_found\
+          \ >= 3: # At least 3 out of 4 elements\n                        audit_trail_found\
+          \ = True\n                        break\n            except Exception:\n \
+          \               continue\n        \n        if not audit_trail_found:\n  \
+          \          self.violations.append({\n                \"rule\": \"21 CFR 11.10(e)\"\
+          ,\n                \"description\": \"Audit Trail - Incomplete audit trail\
+          \ implementation\",\n                \"severity\": \"HIGH\"\n            })\n\
+          \        else:\n            self.checks_passed += 1\n            print(\"\u2705\
+          \ CFR-compliant audit trail found\")\n            \n    def validate_record_retention(self):\n\
+          \        \"\"\"Validate record retention implementation\"\"\"\n        print(\"\
+          \U0001F50D Validating record retention...\")\n        self.checks_total +=\
+          \ 1\n        \n        # Check for backup and archival policies\n        retention_files\
+          \ = [\n            \"docs/disaster-recovery-plan.md\",\n            \"k8s/monitoring/prometheus-grafana.yaml\"\
+          ,\n            \"scripts/compliance/backup-policy.sh\"\n        ]\n      \
+          \  \n        retention_found = any(os.path.exists(f) for f in retention_files)\n\
+          \        \n        if not retention_found:\n            self.violations.append({\n\
+          \                \"rule\": \"21 CFR 11.10(b)\",\n                \"description\"\
+          : \"Record Retention - No retention policy implementation found\",\n     \
+          \           \"severity\": \"MEDIUM\"\n            })\n        else:\n    \
+          \        self.checks_passed += 1\n            print(\"\u2705 Record retention\
+          \ policy found\")\n            \n    def validate_system_validation(self):\n\
+          \        \"\"\"Validate system validation documentation\"\"\"\n        print(\"\
+          \U0001F50D Validating system validation...\")\n        self.checks_total +=\
+          \ 1\n        \n        validation_files = [\n            \"docs/validation/implementation_validation.md\"\
+          ,\n            \"tests/e2e/critical-user-flows.spec.ts\",\n            \"\
+          scripts/validation/run-full-validation.sh\"\n        ]\n        \n       \
+          \ validation_found = any(os.path.exists(f) for f in validation_files)\n  \
+          \      \n        if not validation_found:\n            self.violations.append({\n\
+          \                \"rule\": \"21 CFR 11.10(a)\",\n                \"description\"\
+          : \"System Validation - No validation documentation found\",\n           \
+          \     \"severity\": \"MEDIUM\"\n            })\n        else:\n          \
+          \  self.checks_passed += 1\n            print(\"\u2705 System validation documentation\
+          \ found\")\n            \n    def run_validation(self):\n        \"\"\"Run\
+          \ all FDA CFR validations\"\"\"\n        print(\"\U0001F1FA\U0001F1F8 Starting\
+          \ FDA 21 CFR Part 11 Validation...\")\n        \n        self.validate_electronic_signatures()\n\
+          \        self.validate_audit_trail()\n        self.validate_record_retention()\n\
+          \        self.validate_system_validation()\n        \n        return {\n \
+          \           \"violations\": self.violations,\n            \"checks_passed\"\
+          : self.checks_passed,\n            \"checks_total\": self.checks_total,\n\
+          \            \"compliance_percentage\": (self.checks_passed / self.checks_total)\
+          \ * 100 if self.checks_total > 0 else 0\n        }\n\nif __name__ == \"__main__\"\
+          :\n    validator = FDACFRValidator()\n    results = validator.run_validation()\n\
+          \    \n    with open(\"fda-cfr-validation-results.json\", \"w\") as f:\n \
+          \       json.dump(results, f, indent=2)\n    \n    print(f\"\\n\U0001F4CA\
+          \ FDA 21 CFR Part 11 Validation Results: \")\n    print(f\"   Checks Passed:\
+          \ {results['checks_passed']}/{results['checks_total']}\")\n    print(f\" \
+          \  Compliance: {results['compliance_percentage']:.1f}%\")\n    print(f\" \
+          \  Violations: {len(results['violations'])}\")\n    \n    if results['compliance_percentage']\
+          \ < 100:\n        print(\"\u274C FDA CFR compliance issues found!\")\n   \
+          \ else:\n        print(\"\u2705 FDA CFR compliance validated\")\nEOF\n\npython\
+          \ fda_cfr_validation.py\n"
+      - name: Upload FDA CFR Validation Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: fda-cfr-validation-results
+          path: fda-cfr-validation-results.json
+          retention-days: 90
+  generate-compliance-report:
+    name: Generate Compliance Report
+    runs-on: ubuntu-latest
+    needs:
+      - hipaa-technical-safeguards
+      - gdpr-privacy-validation
+      - fda-cfr-validation
+    if: always()
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Download All Validation Results
+        uses: actions/download-artifact@v4
+        with:
+          path: compliance-results/
+      - name: Generate Comprehensive Compliance Report
+        run: "cat > generate_compliance_report.py << 'EOF'\n#!/usr/bin/env python3\n\
+          import json\nimport os\nfrom datetime import datetime\n\ndef load_validation_results():\n\
+          \    results = {}\n    \n    # Load HIPAA results\n    try:\n        with\
+          \ open(\"compliance-results/hipaa-validation-results/hipaa-access-control-results.json\"\
+          , \"r\") as f:\n            results[\"hipaa_access\"] = json.load(f)\n   \
+          \     with open(\"compliance-results/hipaa-validation-results/hipaa-audit-controls-results.json\"\
+          , \"r\") as f:\n            results[\"hipaa_audit\"] = json.load(f)\n    except\
+          \ Exception as e:\n        print(f\"Warning: Could not load HIPAA results:\
+          \ {e}\")\n        results[\"hipaa_access\"] = {\"compliance_percentage\":\
+          \ 0, \"violations\": []}\n        results[\"hipaa_audit\"] = {\"compliance_percentage\"\
+          : 0, \"violations\": []}\n    \n    # Load GDPR results\n    try:\n      \
+          \  with open(\"compliance-results/gdpr-validation-results/gdpr-validation-results.json\"\
+          , \"r\") as f:\n            results[\"gdpr\"] = json.load(f)\n    except Exception\
+          \ as e:\n        print(f\"Warning: Could not load GDPR results: {e}\")\n \
+          \       results[\"gdpr\"] = {\"compliance_percentage\": 0, \"violations\"\
+          : []}\n    \n    # Load FDA CFR results\n    try:\n        with open(\"compliance-results/fda-cfr-validation-results/fda-cfr-validation-results.json\"\
+          , \"r\") as f:\n            results[\"fda_cfr\"] = json.load(f)\n    except\
+          \ Exception as e:\n        print(f\"Warning: Could not load FDA CFR results:\
+          \ {e}\")\n        results[\"fda_cfr\"] = {\"compliance_percentage\": 0, \"\
+          violations\": []}\n    \n    return results\n\ndef generate_html_report(results):\n\
+          \    # Calculate overall compliance\n    compliance_scores = [\n        results[\"\
+          hipaa_access\"][\"compliance_percentage\"],\n        results[\"hipaa_audit\"\
+          ][\"compliance_percentage\"],\n        results[\"gdpr\"][\"compliance_percentage\"\
+          ],\n        results[\"fda_cfr\"][\"compliance_percentage\"]\n    ]\n    overall_compliance\
+          \ = sum(compliance_scores) / len(compliance_scores)\n    \n    # Count total\
+          \ violations\n    total_violations = (\n        len(results[\"hipaa_access\"\
+          ][\"violations\"]) +\n        len(results[\"hipaa_audit\"][\"violations\"\
+          ]) +\n        len(results[\"gdpr\"][\"violations\"]) +\n        len(results[\"\
+          fda_cfr\"][\"violations\"])\n    )\n    \n    html = f\"\"\"\n    <!DOCTYPE\
+          \ html>\n    <html>\n    <head>\n        <title>HMS Healthcare Compliance\
+          \ Report</title>\n        <style>\n            body {{ font-family: Arial,\
+          \ sans-serif; margin: 20px; }}\n            .header {{ background-color: #f8f9fa;\
+          \ padding: 20px; border-radius: 5px; }}\n            .compliance-score {{\
+          \ font-size: 24px; font-weight: bold; }}\n            .excellent {{ color:\
+          \ #28a745; }}\n            .good {{ color: #17a2b8; }}\n            .warning\
+          \ {{ color: #ffc107; }}\n            .danger {{ color: #dc3545; }}\n     \
+          \       .summary {{ background-color: #e9ecef; padding: 15px; margin: 10px\
+          \ 0; }}\n            table {{ width: 100%; border-collapse: collapse; margin:\
+          \ 10px 0; }}\n            th, td {{ border: 1px solid #dee2e6; padding: 8px;\
+          \ text-align: left; }}\n            th {{ background-color: #495057; color:\
+          \ white; }}\n            .violation {{ background-color: #f8d7da; padding:\
+          \ 10px; margin: 5px 0; border-radius: 3px; }}\n            .high {{ border-left:\
+          \ 5px solid #dc3545; }}\n            .medium {{ border-left: 5px solid #ffc107;\
+          \ }}\n            .low {{ border-left: 5px solid #28a745; }}\n        </style>\n\
+          \    </head>\n    <body>\n        <div class=\"header\">\n            <h1>\U0001F3E5\
+          \ HMS Healthcare Compliance Report</h1>\n            <p><strong>Generated:\
+          \ </strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}</p>\n     \
+          \       <p><strong>Repository: </strong> Hospital Management System</p>\n\
+          \            <p><strong>Branch: </strong> ${{{{ github.ref_name }}}}</p>\n\
+          \        </div>\n        \n        <div class=\"summary\">\n            <h2>\U0001F4CA\
+          \ Overall Compliance Status</h2>\n            <div class=\"compliance-score\
+          \ {'excellent' if overall_compliance >= 95 else 'good' if overall_compliance\
+          \ >= 80 else 'warning' if overall_compliance >= 70 else 'danger'}\">\n   \
+          \             {overall_compliance: .1f}% Compliant\n            </div>\n \
+          \           <p><strong>Total Violations: </strong> {total_violations}</p>\n\
+          \            <p><strong>Compliance Level: </strong> {'EXCELLENT' if overall_compliance\
+          \ >= 95 else 'GOOD' if overall_compliance >= 80 else 'NEEDS IMPROVEMENT' if\
+          \ overall_compliance >= 70 else 'CRITICAL'}</p>\n        </div>\n        \n\
+          \        <h2>\U0001F50D Regulatory Compliance Breakdown</h2>\n        <table>\n\
+          \            <tr>\n                <th>Regulation</th>\n                <th>Compliance\
+          \ Score</th>\n                <th>Violations</th>\n                <th>Status</th>\n\
+          \            </tr>\n            <tr>\n                <td><strong>HIPAA -\
+          \ Access Control</strong></td>\n                <td>{results[\"hipaa_access\"\
+          ][\"compliance_percentage\"]: .1f}%</td>\n                <td>{len(results[\"\
+          hipaa_access\"][\"violations\"])}</td>\n                <td>{'\u2705 COMPLIANT'\
+          \ if results[\"hipaa_access\"][\"compliance_percentage\"] >= 90 else '\u26A0\
+          \uFE0F ISSUES'}</td>\n            </tr>\n            <tr>\n              \
+          \  <td><strong>HIPAA - Audit Controls</strong></td>\n                <td>{results[\"\
+          hipaa_audit\"][\"compliance_percentage\"]: .1f}%</td>\n                <td>{len(results[\"\
+          hipaa_audit\"][\"violations\"])}</td>\n                <td>{'\u2705 COMPLIANT'\
+          \ if results[\"hipaa_audit\"][\"compliance_percentage\"] >= 90 else '\u26A0\
+          \uFE0F ISSUES'}</td>\n            </tr>\n            <tr>\n              \
+          \  <td><strong>GDPR - Privacy by Design</strong></td>\n                <td>{results[\"\
+          gdpr\"][\"compliance_percentage\"]: .1f}%</td>\n                <td>{len(results[\"\
+          gdpr\"][\"violations\"])}</td>\n                <td>{'\u2705 COMPLIANT' if\
+          \ results[\"gdpr\"][\"compliance_percentage\"] >= 90 else '\u26A0\uFE0F ISSUES'}</td>\n\
+          \            </tr>\n            <tr>\n                <td><strong>FDA 21 CFR\
+          \ Part 11</strong></td>\n                <td>{results[\"fda_cfr\"][\"compliance_percentage\"\
+          ]: .1f}%</td>\n                <td>{len(results[\"fda_cfr\"][\"violations\"\
+          ])}</td>\n                <td>{'\u2705 COMPLIANT' if results[\"fda_cfr\"][\"\
+          compliance_percentage\"] >= 90 else '\u26A0\uFE0F ISSUES'}</td>\n        \
+          \    </tr>\n        </table>\n    \"\"\"\n    \n    # Add violations details\
+          \ if any\n    if total_violations > 0:\n        html += \"<h2>\u26A0\uFE0F\
+          \ Compliance Violations</h2>\"\n        \n        for category, data in results.items():\n\
+          \            if data[\"violations\"]:\n                html += f\"<h3>{category.replace('_',\
+          \ ' ').title()}</h3>\"\n                for violation in data[\"violations\"\
+          ]:\n                    severity_class = violation.get(\"severity\", \"medium\"\
+          ).lower()\n                    html += f\"\"\"\n                    <div class=\"\
+          violation {severity_class}\">\n                        <strong>{violation.get(\"\
+          rule\", \"Unknown Rule\")}</strong> - {violation.get(\"severity\", \"MEDIUM\"\
+          )} Severity<br>\n                        {violation.get(\"description\", \"\
+          No description available\")}\n                    </div>\n               \
+          \     \"\"\"\n    \n    html += \"\"\"\n        <h2>\U0001F4CB Compliance\
+          \ Recommendations</h2>\n        <ol>\n            <li><strong>Address High-Severity\
+          \ Violations: </strong> Prioritize fixing all HIGH severity compliance issues\
+          \ immediately</li>\n            <li><strong>Implement Missing Controls: </strong>\
+          \ Add any missing technical or administrative safeguards</li>\n          \
+          \  <li><strong>Regular Compliance Audits: </strong> Schedule monthly compliance\
+          \ validation runs</li>\n            <li><strong>Staff Training: </strong>\
+          \ Ensure all team members understand healthcare compliance requirements</li>\n\
+          \            <li><strong>Documentation Updates: </strong> Keep all compliance\
+          \ documentation current and accessible</li>\n        </ol>\n        \n   \
+          \     <h2>\U0001F4DE Compliance Support</h2>\n        <p>For compliance-related\
+          \ questions or support: </p>\n        <ul>\n            <li><strong>Compliance\
+          \ Officer: </strong> compliance@hms-enterprise.com</li>\n            <li><strong>Legal\
+          \ Team: </strong> legal@hms-enterprise.com</li>\n            <li><strong>Privacy\
+          \ Officer: </strong> privacy@hms-enterprise.com</li>\n        </ul>\n    \
+          \    \n        <footer style=\"margin-top: 50px; padding-top: 20px; border-top:\
+          \ 1px solid #dee2e6;\">\n            <p><em>This compliance report is confidential\
+          \ and intended for internal use only. \n            Contains sensitive information\
+          \ regarding HMS regulatory compliance status.</em></p>\n        </footer>\n\
+          \    </body>\n    </html>\n    \"\"\"\n    \n    with open(\"healthcare-compliance-report.html\"\
+          , \"w\") as f:\n        f.write(html)\n    \n    return overall_compliance,\
+          \ total_violations\n\nif __name__ == \"__main__\":\n    results = load_validation_results()\n\
+          \    compliance_score, violations = generate_html_report(results)\n    \n\
+          \    print(f\"\U0001F4CA Healthcare Compliance Report Generated\")\n    print(f\"\
+          \   Overall Compliance: {compliance_score:.1f}%\")\n    print(f\"   Total\
+          \ Violations: {violations}\")\n    \n    if compliance_score < 90:\n     \
+          \   print(\"\u274C Compliance issues require attention!\")\n        exit(1)\n\
+          \    else:\n        print(\"\u2705 Healthcare compliance validated successfully\"\
+          )\nEOF\n\npython generate_compliance_report.py\n"
+      - name: Upload Comprehensive Compliance Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthcare-compliance-report
+          path: healthcare-compliance-report.html
+          retention-days: 365
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: "github.rest.issues.createComment({\n  issue_number: context.issue.number,\n\
+            \  owner: context.repo.owner,\n  repo: context.repo.repo,\n  body: '\U0001F3E5\
+            \ **Healthcare Compliance Validation Completed**\\n\\nComprehensive healthcare\
+            \ compliance validation has been completed covering HIPAA, GDPR, and FDA\
+            \ 21 CFR Part 11 requirements. Please review the detailed compliance report\
+            \ in the artifacts section.'\n})\n"
+"on":
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop

@@ -1,0 +1,1 @@
+// types/schedule.ts;

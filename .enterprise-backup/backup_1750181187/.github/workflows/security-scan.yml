@@ -1,0 +1,389 @@
+name: Advanced Security Scanning
+true:
+  schedule:
+    - cron: 0 1 * * *
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: null
+env:
+  SECURITY_SCAN_TIMEOUT: 60
+jobs:
+  advanced-sast:
+    name: Advanced SAST Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        scanner:
+          - semgrep
+          - codeql
+          - sonar-security
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+      - name: Install Dependencies
+        run: 'npm ci
+
+          cd microservices && find . -name "pom.xml" -execdir mvn dependency: resolve
+          \;
+
+          '
+      - name: Semgrep Security Scan
+        if: matrix.scanner == 'semgrep'
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/security-audit p/secrets p/owasp-top-ten p/cwe-top-25 p/javascript
+            p/java p/docker p/kubernetes p/yaml p/json p/sql-injection p/xss p/command-injection
+          generateSarif: "1"
+          auditOn: push
+      - name: CodeQL Security Analysis
+        if: matrix.scanner == 'codeql'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript, java
+          queries: security-extended,security-and-quality
+      - name: Build for CodeQL
+        if: matrix.scanner == 'codeql'
+        run: 'npm run build
+
+          cd microservices && find . -name "pom.xml" -execdir mvn clean compile \;
+
+          '
+      - name: Complete CodeQL Analysis
+        if: matrix.scanner == 'codeql'
+        uses: github/codeql-action/analyze@v3
+      - name: SonarQube Security Analysis
+        if: matrix.scanner == 'sonar-security'
+        uses: sonarqube-scanner-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args:
+            "-Dsonar.projectKey=hms-security -Dsonar.sources=src,microservices -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+
+            "
+  dependency-security:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        tool:
+          - snyk
+          - ossf-scorecard
+          - dependabot
+          - retire-js
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+      - name: Install Dependencies
+        run: npm ci
+      - name: Snyk Security Test
+        if: matrix.tool == 'snyk'
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --all-projects --json > snyk-report.json
+      - name: OSSF Scorecard Analysis
+        if: matrix.tool == 'ossf-scorecard'
+        uses: ossf/scorecard-action@v2.3.1
+        with:
+          results_file: ossf-scorecard-results.sarif
+          results_format: sarif
+      - name: Retire.js Vulnerability Check
+        if: matrix.tool == 'retire-js'
+        run: "npm install -g retire
+
+          retire --js --outputformat json --outputpath retire-report.json --severity
+          high
+
+          "
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-security-${{ matrix.tool }}
+          path: "snyk-report.json
+
+            ossf-scorecard-results.sarif
+
+            retire-report.json
+
+            "
+          retention-days: 90
+  container-security:
+    name: Container Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        scanner:
+          - trivy
+          - grype
+          - snyk-container
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Container Images
+        run: "docker build -t hms-frontend: security-scan .
+
+          docker build -f microservices/Dockerfile -t hms-microservices: security-scan
+          ./microservices
+
+          "
+      - name: Trivy Container Scan
+        if: matrix.scanner == 'trivy'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: hms-frontend:security-scan
+          format: sarif
+          output: trivy-frontend-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+      - name: Anchore Grype Scan
+        if: matrix.scanner == 'grype'
+        uses: anchore/scan-action@v3
+        with:
+          image: hms-frontend:security-scan
+          severity-cutoff: medium
+          output-format: sarif
+      - name: Snyk Container Test
+        if: matrix.scanner == 'snyk-container'
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: hms-frontend:security-scan
+          args: --severity-threshold=high --json > snyk-container-report.json
+      - name: Upload Container Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-security-${{ matrix.scanner }}
+          path: "trivy-frontend-results.sarif
+
+            snyk-container-report.json
+
+            "
+          retention-days: 90
+  infrastructure-security:
+    name: Infrastructure Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Security Tools
+        run: "pip install checkov terrascan tfsec
+
+          "
+      - name: Checkov Infrastructure Scan
+        run:
+          "checkov --framework dockerfile --file Dockerfile --output json > checkov-dockerfile.json
+
+          checkov --framework kubernetes --directory k8s --output json > checkov-k8s.json
+
+          checkov --framework docker_compose --file docker-compose.yml --output json
+          > checkov-compose.json
+
+          "
+      - name: Terrascan IaC Security
+        run: "terrascan scan -t k8s -d k8s --output json > terrascan-k8s.json
+
+          terrascan scan -t docker -f Dockerfile --output json > terrascan-docker.json
+
+          "
+      - name: TfSec Terraform Security
+        if: hashFiles('**/*.tf') != ''
+        run: "tfsec --format json --out tfsec-report.json .
+
+          "
+      - name: Upload Infrastructure Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: infrastructure-security-reports
+          path: "checkov-*.json
+
+            terrascan-*.json
+
+            tfsec-report.json
+
+            "
+          retention-days: 90
+  secret-detection:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+      - name: GitLeaks Secret Detection
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+      - name: Detect-secrets Scan
+        run: "pip install detect-secrets
+
+          detect-secrets scan --all-files --baseline .secrets.baseline
+
+          detect-secrets audit .secrets.baseline
+
+          "
+  security-reporting:
+    name: Security Compliance Reporting
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - advanced-sast
+      - dependency-security
+      - container-security
+      - infrastructure-security
+      - secret-detection
+    if: always()
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Download All Security Reports
+        uses: actions/download-artifact@v4
+        with:
+          path: security-reports/
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Report Generator Dependencies
+        run: "pip install jinja2 pdfkit json5 pandas matplotlib seaborn
+
+          "
+      - name: Generate Comprehensive Security Report
+        run: "python scripts/security/generate-security-report.py
+
+          "
+      - name: HIPAA Compliance Check
+        run: "python scripts/compliance/hipaa-validation.py
+
+          "
+      - name: SOC 2 Compliance Check
+        run: "python scripts/compliance/soc2-validation.py
+
+          "
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: comprehensive-security-report
+          path: "security-compliance-report.pdf
+
+            hipaa-compliance-report.json
+
+            soc2-compliance-report.json
+
+            "
+          retention-days: 365
+      - name: Notify Security Team
+        if: failure()
+        run: "echo \"\U0001F6A8 Critical security vulnerabilities detected!\"\necho\
+          \ \"Review the security reports immediately.\"\n# In production: Send alert\
+          \ to security team via Slack/Email\n"
+  dast-scan:
+    name: OWASP ZAP DAST Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: hms_test
+          POSTGRES_USER: hms_user
+          POSTGRES_PASSWORD: hms_password
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432: 5432
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+      - name: Start Application
+        run: "npm ci
+
+          npm run build
+
+          npm run start: test &
+
+          sleep 30 # Wait for application to start
+
+          "
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: http://localhost:3000
+          rules_file_name: .zap/rules.tsv
+          cmd_options: -a
+      - name: OWASP ZAP Full Scan
+        uses: zaproxy/action-full-scan@v0.8.0
+        with:
+          target: http://localhost:3000
+          rules_file_name: .zap/rules.tsv
+          cmd_options: -a -j
+      - name: Upload ZAP Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-security-reports
+          path: "report_html.html
+
+            report_json.json
+
+            "
+          retention-days: 90
+"on":
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop

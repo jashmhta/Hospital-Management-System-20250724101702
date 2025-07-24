@@ -1,0 +1,60 @@
+server:
+  port: 8094
+  servlet:
+    context-path: /procedure-management
+
+spring:
+  application:
+    name: procedure-management-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hms_procedure_management
+    username: ${DB_USERNAME:hms_user}
+    password: ${DB_PASSWORD:hms_password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 5
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+hms:
+  procedure-management:
+    or-scheduling:
+      advance-booking-days: 90
+      emergency-slots: 2
+    workflow:
+      auto-notifications: true
+      quality-tracking: true

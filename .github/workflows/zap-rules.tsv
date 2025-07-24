@@ -1,0 +1,107 @@
+# HMS Enterprise OWASP ZAP Security Rules
+# Healthcare-specific security testing configuration
+# Format: RULE_ID	THRESHOLD	ACTION	COMMENTS
+
+# Ignore rules for specific contexts
+10021	OFF	IGNORE	# X-Content-Type-Options header missing (handled by our security middleware)
+10020	OFF	IGNORE	# Missing Anti-clickjacking Header (handled by our CSP)
+
+# Healthcare-specific security rules
+10016	HIGH	FAIL	# Web Browser XSS Protection Not Enabled
+10017	HIGH	FAIL	# Cross-Domain JavaScript Source File Inclusion
+10019	HIGH	FAIL	# Content-Type Header Missing
+10023	MEDIUM	WARN	# Information Disclosure - Debug Error Messages
+10024	LOW	INFO	# Information Disclosure - Sensitive Information in URL
+10025	MEDIUM	WARN	# Information Disclosure - Sensitive Information in HTTP Referrer Header
+10026	MEDIUM	WARN	# HTTP Parameter Override
+10027	MEDIUM	WARN	# Information Disclosure - Suspicious Comments
+10028	MEDIUM	WARN	# Open Redirect
+10029	MEDIUM	WARN	# Cookie Poisoning
+10030	LOW	INFO	# User Controllable Charset
+10031	LOW	INFO	# User Controllable HTML Element Attribute (Potential XSS)
+10032	MEDIUM	WARN	# Viewstate without MAC Enabled
+10033	LOW	INFO	# Directory Browsing
+10034	LOW	INFO	# Heartbleed OpenSSL Vulnerability (Indicative)
+10035	HIGH	FAIL	# Strict-Transport-Security Header Not Set
+10036	MEDIUM	WARN	# Server Leaks Version Information via "Server" HTTP Response Header Field
+10037	MEDIUM	WARN	# Server Leaks Information via "X-Powered-By" HTTP Response Header Field(s)
+10038	MEDIUM	WARN	# Content Security Policy (CSP) Header Not Set
+10039	LOW	INFO	# X-Backend-Server Header Information Leak
+10040	LOW	INFO	# Secure Pages Include Mixed Content
+10041	LOW	INFO	# HTTP to HTTPS Insecure Transition in Form Post
+10042	MEDIUM	WARN	# HTTPS to HTTP Insecure Transition in Form Post
+10043	MEDIUM	WARN	# User Controllable JavaScript Event (XSS)
+10044	LOW	INFO	# Big Redirect Detected (Potential Sensitive Information Leak)
+10045	LOW	INFO	# Source Code Disclosure - /WEB-INF folder
+10046	MEDIUM	WARN	# Insecure JSF ViewState
+10047	LOW	INFO	# HTTPS Content Available via HTTP
+10048	HIGH	FAIL	# Remote Code Execution - Shell Shock
+10049	MEDIUM	WARN	# Content Cacheability
+10050	LOW	INFO	# Retrieved from Cache
+10051	LOW	INFO	# Relative Path Confusion
+10052	LOW	INFO	# X-ChromeLogger-Data (XCOLD) Header Information Leak
+10053	LOW	INFO	# Apache Range Header DoS (CVE-2011-3192)
+10054	LOW	INFO	# Cookie without SameSite Attribute
+10055	LOW	INFO	# CSP Scanner: Wildcard Directive
+10056	MEDIUM	WARN	# X-Debug-Token Information Leak
+10057	LOW	INFO	# Username Hash Found
+10058	MEDIUM	WARN	# GET for POST
+10059	LOW	INFO	# PII Disclosure
+10060	LOW	INFO	# Insecure Component
+10061	MEDIUM	WARN	# X-AspNet-Version Response Header
+10062	LOW	INFO	# PII Scanner
+10063	MEDIUM	WARN	# Permissions Policy Header Not Set
+10094	HIGH	FAIL	# Base64 Disclosure
+10095	LOW	INFO	# Backup File Disclosure
+10096	HIGH	FAIL	# Timestamp Disclosure
+10097	HIGH	FAIL	# Hash Disclosure
+10098	MEDIUM	WARN	# Cross-Domain Misconfiguration
+10099	LOW	INFO	# Source Code Disclosure
+
+# SQL Injection rules
+40018	HIGH	FAIL	# SQL Injection
+40019	HIGH	FAIL	# SQL Injection - MySQL
+40020	HIGH	FAIL	# SQL Injection - Hypersonic SQL
+40021	HIGH	FAIL	# SQL Injection - Oracle
+40022	HIGH	FAIL	# SQL Injection - PostgreSQL
+40023	HIGH	FAIL	# Possible Username Enumeration
+40024	HIGH	FAIL	# SQL Injection - SQLite
+40025	MEDIUM	WARN	# Proxy Disclosure
+40026	MEDIUM	WARN	# Cross Site Scripting (Reflected)
+40027	MEDIUM	WARN	# SQL Injection - MsSQL
+40028	HIGH	FAIL	# CRLF Injection
+40029	MEDIUM	WARN	# Trace.axd Information Leak
+
+# Healthcare-specific PHI protection rules
+90001	HIGH	FAIL	# Insecure HTTP Method
+90002	MEDIUM	WARN	# Private IP Disclosure
+90003	LOW	INFO	# Subresource Integrity Attribute Missing
+90004	LOW	INFO	# Insufficient Site Isolation Against Spectre Vulnerability
+90005	MEDIUM	WARN	# Sec-Fetch-Dest Header is Missing
+90006	MEDIUM	WARN	# Sec-Fetch-Site Header is Missing
+90007	MEDIUM	WARN	# Sec-Fetch-User Header is Missing
+90008	LOW	INFO	# Content Security Policy (CSP) Header Not Set
+90009	MEDIUM	WARN	# Insufficient Authentication
+90010	HIGH	FAIL	# Insufficient Authorization
+90011	HIGH	FAIL	# Insufficient Session Expiration
+90012	MEDIUM	WARN	# Session ID in URL Rewrite
+90013	MEDIUM	WARN	# Weak Authentication Method
+90014	HIGH	FAIL	# Sensitive Information Disclosure
+90015	HIGH	FAIL	# PHI Data Exposure
+90016	HIGH	FAIL	# Medical Record Number Disclosure
+90017	HIGH	FAIL	# Social Security Number Pattern
+90018	HIGH	FAIL	# Credit Card Number Pattern
+90019	MEDIUM	WARN	# Date of Birth Pattern
+90020	MEDIUM	WARN	# Phone Number Pattern
+
+# Custom HMS rules
+100001	HIGH	FAIL	# Hardcoded Password
+100002	HIGH	FAIL	# Hardcoded API Key
+100003	MEDIUM	WARN	# Debug Information Leak
+100004	HIGH	FAIL	# Database Connection String Exposure
+100005	MEDIUM	WARN	# Stack Trace Disclosure
+100006	HIGH	FAIL	# Configuration File Exposure
+100007	MEDIUM	WARN	# Error Message Information Leak
+100008	LOW	INFO	# Commented Code
+100009	MEDIUM	WARN	# TODO/FIXME Comments
+100010	HIGH	FAIL	# Backup Files

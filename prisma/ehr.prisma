@@ -1,0 +1,561 @@
+// Electronic Health Records (EHR) Schema
+// This schema defines the core clinical documentation models for the EHR module
+
+// ClinicalEncounter - Represents a clinical encounter/visit
+model ClinicalEncounter {
+  id                   String                @id @default(uuid())
+  encounterId          String                @unique // Unique encounter identifier
+  patientId            String                // Reference to patient
+  encounterType        String                // Outpatient, Inpatient, Emergency, Virtual, etc.
+  startDateTime        DateTime
+  endDateTime          DateTime?
+  status               String                // Scheduled, In Progress, Completed, Cancelled
+  primaryProviderId    String
+  attendingProviderId  String?
+  departmentId         String?
+  locationId           String?
+  admissionSource      String?
+  dischargeDisposition String?
+  chiefComplaint       String?
+  presentingProblem    String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  vitalSigns           VitalSignRecord[]
+  soapNotes            SoapNote[]
+  progressNotes        ProgressNote[]
+  assessments          Assessment[]
+  carePlans            CarePlan[]
+  procedures           Procedure[]
+  diagnoses            Diagnosis[]
+  orders               ClinicalOrder[]
+  medications          MedicationRecord[]
+  problemEntries       ProblemEntry[]
+  allergyEntries       AllergyEntry[]
+  attachments          ClinicalAttachment[]
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([startDateTime])
+  @@index([encounterType])
+  @@index([status])
+  @@index([primaryProviderId])
+}
+
+// VitalSignRecord - Patient vital signs measurements
+model VitalSignRecord {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  recordedAt           DateTime
+  recordedBy           String
+  vitalType            String                // BP, HR, Temp, RR, SpO2, Height, Weight, BMI, Pain
+  value                String
+  unit                 String
+  interpretation       String?               // Normal, Abnormal, Critical
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([recordedAt])
+  @@index([vitalType])
+}
+
+// SoapNote - SOAP format clinical notes (Subjective, Objective, Assessment, Plan)
+model SoapNote {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  providerId           String
+  noteDateTime         DateTime
+  subjective           String                // Patient's history, symptoms, complaints
+  objective            String                // Physical exam findings, lab results, vital signs
+  assessment           String                // Diagnosis, interpretation of findings
+  plan                 String                // Treatment plan, medications, follow-up
+  additionalNotes      String?
+  status               String                // Draft, Final, Amended, Deleted
+  signedBy             String?
+  signatureDateTime    DateTime?
+  amendedNoteId        String?               // Reference to original note if this is an amendment
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([providerId])
+  @@index([noteDateTime])
+  @@index([status])
+}
+
+// ProgressNote - Ongoing clinical documentation
+model ProgressNote {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  authorId             String
+  authorRole           String
+  noteDateTime         DateTime
+  noteType             String                // Daily Progress, Nursing, Therapy, Consult, etc.
+  content              String
+  status               String                // Draft, Final, Amended, Deleted
+  signedBy             String?
+  signatureDateTime    DateTime?
+  amendedNoteId        String?               // Reference to original note if this is an amendment
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([authorId])
+  @@index([noteDateTime])
+  @@index([noteType])
+  @@index([status])
+}
+
+// Assessment - Clinical assessments
+model Assessment {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  assessmentType       String                // Initial, Follow-up, Discharge, etc.
+  assessmentDateTime   DateTime
+  performedBy          String
+  performerRole        String
+  assessmentTools      String[]              // Tools or scales used
+  findings             String
+  interpretation       String
+  recommendations      String?
+  status               String                // Draft, Final, Amended
+  signedBy             String?
+  signatureDateTime    DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([assessmentType])
+  @@index([assessmentDateTime])
+  @@index([performedBy])
+  @@index([status])
+}
+
+// CarePlan - Patient care plans
+model CarePlan {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  title                String
+  description          String?
+  createdBy            String
+  createdDateTime      DateTime
+  startDate            DateTime
+  endDate              DateTime?
+  status               String                // Active, Completed, Cancelled
+  goals                CarePlanGoal[]
+  interventions        CarePlanIntervention[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([status])
+  @@index([startDate])
+}
+
+// CarePlanGoal - Goals within a care plan
+model CarePlanGoal {
+  id                   String                @id @default(uuid())
+  carePlanId           String
+  carePlan             CarePlan              @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  description          String
+  targetDate           DateTime?
+  priority             String                // High, Medium, Low
+  status               String                // Not Started, In Progress, Achieved, Abandoned
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([carePlanId])
+  @@index([status])
+  @@index([priority])
+}
+
+// CarePlanIntervention - Interventions within a care plan
+model CarePlanIntervention {
+  id                   String                @id @default(uuid())
+  carePlanId           String
+  carePlan             CarePlan              @relation(fields: [carePlanId], references: [id], onDelete: Cascade)
+  description          String
+  interventionType     String                // Medication, Procedure, Education, etc.
+  frequency            String?
+  duration             String?
+  performedBy          String?
+  status               String                // Ordered, In Progress, Completed, Discontinued
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([carePlanId])
+  @@index([interventionType])
+  @@index([status])
+}
+
+// Procedure - Clinical procedures
+model Procedure {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  procedureName        String
+  procedureCode        String?               // CPT or other procedure code
+  procedureDateTime    DateTime
+  performedBy          String
+  performerRole        String
+  location             String?
+  status               String                // Ordered, In Progress, Completed, Cancelled
+  bodySite             String?
+  laterality           String?               // Left, Right, Bilateral
+  anesthesia           String?
+  findings             String?
+  complications        String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([procedureCode])
+  @@index([procedureDateTime])
+  @@index([status])
+}
+
+// Diagnosis - Clinical diagnoses
+model Diagnosis {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  diagnosisName        String
+  diagnosisCode        String?               // ICD-10 or other diagnosis code
+  diagnosisType        String                // Principal, Secondary, Admission, etc.
+  diagnosisDateTime    DateTime
+  diagnosedBy          String
+  certainty            String?               // Confirmed, Suspected, Rule Out
+  stage                String?
+  severity             String?               // Mild, Moderate, Severe
+  acuity               String?               // Acute, Chronic, Acute on Chronic
+  onset                DateTime?
+  notes                String?
+  status               String                // Active, Resolved, Ruled Out
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([diagnosisCode])
+  @@index([diagnosisType])
+  @@index([status])
+}
+
+// ClinicalOrder - Orders within an encounter
+model ClinicalOrder {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  orderType            String                // Lab, Imaging, Medication, Procedure, Consult, etc.
+  orderName            String
+  orderCode            String?
+  orderedBy            String
+  ordererRole          String
+  orderDateTime        DateTime
+  startDateTime        DateTime?
+  endDateTime          DateTime?
+  priority             String                // Routine, Urgent, STAT
+  status               String                // Ordered, In Progress, Completed, Cancelled
+  reason               String?
+  instructions         String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([orderType])
+  @@index([orderDateTime])
+  @@index([priority])
+  @@index([status])
+}
+
+// MedicationRecord - Medication administration/prescriptions
+model MedicationRecord {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  medicationName       String
+  medicationCode       String?
+  dosage               String
+  route                String                // Oral, IV, IM, etc.
+  frequency            String
+  startDateTime        DateTime
+  endDateTime          DateTime?
+  recordType           String                // Prescription, Administration, MAR entry
+  prescribedBy         String?
+  administeredBy       String?
+  administrationDateTime DateTime?
+  status               String                // Active, Discontinued, Completed
+  reason               String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([medicationName])
+  @@index([recordType])
+  @@index([startDateTime])
+  @@index([status])
+}
+
+// ProblemEntry - Problem list entries
+model ProblemEntry {
+  id                   String                @id @default(uuid())
+  encounterId          String?
+  encounter            ClinicalEncounter?    @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  patientId            String
+  problemName          String
+  problemCode          String?               // ICD-10 or other problem code
+  onsetDateTime        DateTime?
+  recordedDateTime     DateTime
+  recordedBy           String
+  category             String?               // Medical, Surgical, Psychiatric, Social
+  severity             String?               // Mild, Moderate, Severe
+  status               String                // Active, Inactive, Resolved
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([problemName])
+  @@index([problemCode])
+  @@index([status])
+}
+
+// AllergyEntry - Allergy list entries
+model AllergyEntry {
+  id                   String                @id @default(uuid())
+  encounterId          String?
+  encounter            ClinicalEncounter?    @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  patientId            String
+  allergen             String
+  allergenType         String                // Drug, Food, Environmental
+  reaction             String?
+  severity             String                // Mild, Moderate, Severe, Life-threatening
+  onsetDateTime        DateTime?
+  recordedDateTime     DateTime
+  recordedBy           String
+  status               String                // Active, Inactive, Resolved
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([allergen])
+  @@index([allergenType])
+  @@index([severity])
+  @@index([status])
+}
+
+// ClinicalAttachment - Attached documents/files to an encounter
+model ClinicalAttachment {
+  id                   String                @id @default(uuid())
+  encounterId          String
+  encounter            ClinicalEncounter     @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patientId            String
+  attachmentType       String                // Lab Report, Imaging Report, Consent Form, etc.
+  filename             String
+  fileUrl              String
+  mimeType             String
+  fileSize             Int
+  uploadDateTime       DateTime
+  uploadedBy           String
+  description          String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([encounterId])
+  @@index([patientId])
+  @@index([attachmentType])
+  @@index([uploadDateTime])
+}
+
+// ClinicalTemplate - Templates for clinical documentation
+model ClinicalTemplate {
+  id                   String                @id @default(uuid())
+  templateName         String
+  templateType         String                // SOAP, Progress Note, Assessment, etc.
+  specialty            String?               // Cardiology, Orthopedics, etc.
+  content              String                // Template content, may include placeholders
+  isActive             Boolean               @default(true)
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([templateType])
+  @@index([specialty])
+  @@index([isActive])
+}
+
+// ClinicalPathway - Standard care pathways
+model ClinicalPathway {
+  id                   String                @id @default(uuid())
+  pathwayName          String
+  description          String
+  condition            String                // Condition or procedure this pathway is for
+  version              String
+  effectiveDate        DateTime
+  expirationDate       DateTime?
+  isActive             Boolean               @default(true)
+  author               String
+  evidenceLevel        String?               // Level of evidence
+  department           String?
+  specialty            String?
+  stages               ClinicalPathwayStage[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([condition])
+  @@index([isActive])
+  @@index([specialty])
+}
+
+// ClinicalPathwayStage - Stages within a clinical pathway
+model ClinicalPathwayStage {
+  id                   String                @id @default(uuid())
+  pathwayId            String
+  pathway              ClinicalPathway       @relation(fields: [pathwayId], references: [id], onDelete: Cascade)
+  stageName            String
+  stageOrder           Int
+  description          String
+  expectedDuration     String?               // Duration expected for this stage
+  actions              ClinicalPathwayAction[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([pathwayId])
+  @@index([stageOrder])
+}
+
+// ClinicalPathwayAction - Actions within a pathway stage
+model ClinicalPathwayAction {
+  id                   String                @id @default(uuid())
+  stageId              String
+  stage                ClinicalPathwayStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  actionName           String
+  actionType           String                // Assessment, Medication, Procedure, Education, etc.
+  description          String
+  isRequired           Boolean               @default(true)
+  actionOrder          Int
+  responsibility       String?               // Role responsible for this action
+  expectedOutcome      String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([stageId])
+  @@index([actionType])
+  @@index([actionOrder])
+}
+
+// DischargeSummary - Patient discharge documentation
+model DischargeSummary {
+  id                   String                @id @default(uuid())
+  patientId            String
+  encounterId          String                @unique
+  dischargingProviderId String
+  dischargeDateTime    DateTime
+  admissionDateTime    DateTime
+  lengthOfStay         Int                   // Length of stay in days
+  admissionDiagnosis   String
+  dischargeDiagnosis   String[]
+  proceduresPerformed  String[]
+  briefHospitalCourse  String
+  significantFindings  String
+  conditionAtDischarge String
+  medicationsAtDischarge String
+  followUpInstructions String
+  followUpAppointments String?
+  activityInstructions String?
+  dietInstructions     String?
+  specialInstructions  String?
+  disposition          String                // Home, SNF, Rehab, etc.
+  status               String                // Draft, Final, Amended
+  signedBy             String?
+  signatureDateTime    DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([dischargeDateTime])
+  @@index([status])
+}
+
+// ClinicalDecisionSupport - Clinical decision support rules
+model ClinicalDecisionSupport {
+  id                   String                @id @default(uuid())
+  ruleName             String
+  description          String
+  ruleType             String                // Alert, Reminder, Suggestion, Informational
+  triggerEvent         String                // On Order, On Documentation, On Result, etc.
+  triggerCriteria      String                // Criteria that activates this rule
+  action               String                // Action to take when rule fires
+  priority             String                // High, Medium, Low
+  evidenceLevel        String?               // Level of evidence
+  reference            String?               // Clinical reference or guideline
+  isActive             Boolean               @default(true)
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([ruleType])
+  @@index([triggerEvent])
+  @@index([priority])
+  @@index([isActive])
+}
+
+// ClinicalAuditLog - Audit logs for clinical data
+model ClinicalAuditLog {
+  id                   String                @id @default(uuid())
+  patientId            String
+  encounterId          String?
+  action               String                // View, Create, Update, Delete, Print, Export
+  resourceType         String                // Note, Order, Medication, Problem, etc.
+  resourceId           String?
+  description          String
+  performedBy          String
+  performerRole        String
+  ipAddress            String?
+  userAgent            String?
+  timestamp            DateTime              @default(now())
+  
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([performedBy])
+  @@index([timestamp])
+}

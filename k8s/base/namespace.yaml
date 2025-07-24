@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hospital-management
+  labels:
+    name: hospital-management
+    environment: production
+    app: hms
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hospital-management-staging
+  labels:
+    name: hospital-management-staging
+    environment: staging
+    app: hms

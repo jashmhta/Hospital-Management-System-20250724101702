@@ -1,0 +1,281 @@
+name: "Setup Test Environment"
+description: "Sets up specialized testing environment for different test suites"
+
+inputs:
+  test-suite:
+    description: "Type of test suite to setup for"
+    required: true
+  browser:
+    description: "Browser for E2E tests"
+    required: false
+    default: "chromium"
+  database-url:
+    description: "Database URL for integration tests"
+    required: false
+    default: "postgresql://postgres:postgres@localhost:5432/hms_test"
+
+runs:
+  using: "composite"
+  steps:
+    - name: 🏗️ Base Environment Setup
+      uses: ./.github/actions/setup-environment
+
+    - name: 📦 Install Test Dependencies
+      shell: bash
+      run: |
+        npm ci --include=dev
+
+        # Install additional test dependencies
+        npm install -g \
+          jest-cli \
+          playwright \
+          @playwright/test \
+          newman \
+          postman-collection \
+          artillery \
+          autocannon
+
+    - name: 🎭 Setup E2E Testing (Playwright)
+      if: contains(inputs.test-suite, 'e2e')
+      shell: bash
+      run: |
+        # Install Playwright browsers
+        npx playwright install --with-deps ${{ inputs.browser }}
+        npx playwright install-deps
+
+        # Setup browser preferences for healthcare compliance
+        mkdir -p ~/.config/playwright
+        cat > ~/.config/playwright/config.json << EOF
+        {
+          "browser": "${{ inputs.browser }}",
+          "viewport": { "width": 1920, "height": 1080 },
+          "ignoreHTTPSErrors": false,
+          "video": "retain-on-failure",
+          "screenshot": "only-on-failure",
+          "trace": "retain-on-failure"
+        }
+        EOF
+
+    - name: ⚡ Setup Performance Testing
+      if: contains(inputs.test-suite, 'performance')
+      shell: bash
+      run: |
+        # Configure k6 for healthcare-specific performance testing
+        mkdir -p ~/.config/k6
+        cat > ~/.config/k6/config.json << EOF
+        {
+          "duration": "5m",
+          "vus": 10,
+          "thresholds": {
+            "http_req_duration": ["p(95)<2000"],
+            "http_req_failed": ["rate<0.1"],
+            "http_reqs": ["rate>10"]
+          }
+        }
+        EOF
+
+        # Install additional performance tools
+        docker pull grafana/k6:latest
+
+    - name: 🛡️ Setup Security Testing
+      if: contains(inputs.test-suite, 'security')
+      shell: bash
+      run: |
+        # Setup OWASP ZAP
+        docker pull owasp/zap2docker-stable
+        docker pull owasp/zap2docker-weekly
+
+        # Download ZAP rules for healthcare
+        mkdir -p ~/.zap/rules
+        wget -O ~/.zap/rules/healthcare-rules.conf \
+          https://raw.githubusercontent.com/zaproxy/zap-extensions/main/addOns/pscanrulesBeta/src/main/zapHomeFiles/xml/pscan-beta.conf
+          
+        # Setup Nuclei templates
+        docker pull projectdiscovery/nuclei:latest
+
+    - name: ♿ Setup Accessibility Testing
+      if: contains(inputs.test-suite, 'accessibility')
+      shell: bash
+      run: |
+        # Install axe-core and lighthouse
+        npm install -g \
+          @axe-core/cli \
+          lighthouse \
+          pa11y \
+          pa11y-ci
+          
+        # Setup accessibility configuration
+        mkdir -p ~/.config/accessibility
+        cat > ~/.config/accessibility/axe-config.json << EOF
+        {
+          "rules": {
+            "wcag2a": { "enabled": true },
+            "wcag2aa": { "enabled": true },
+            "wcag21aa": { "enabled": true },
+            "best-practice": { "enabled": true }
+          },
+          "tags": ["wcag2a", "wcag2aa", "wcag21aa", "best-practice"],
+          "locale": "en"
+        }
+        EOF
+
+    - name: 🗃️ Setup Database Testing
+      if: contains(inputs.test-suite, 'database') || contains(inputs.test-suite, 'integration')
+      shell: bash
+      run: |
+        # Install database testing tools
+        npm install -g \
+          prisma \
+          @prisma/client \
+          pg \
+          redis
+          
+        # Setup test database
+        export DATABASE_URL="${{ inputs.database-url }}"
+        npx prisma generate
+        npx prisma db push --force-reset
+
+        # Run database migrations for testing
+        npx prisma migrate deploy
+
+        # Seed test data
+        npm run db:seed:test || echo "No test seed script found"
+
+    - name: 🔗 Setup API Testing
+      if: contains(inputs.test-suite, 'api') || contains(inputs.test-suite, 'integration')
+      shell: bash
+      run: |
+        # Setup Newman for Postman collection testing
+        newman --version
+
+        # Setup API testing environment
+        mkdir -p tests/api/environments
+
+        # Create test environment file
+        cat > tests/api/environments/ci.json << EOF
+        {
+          "id": "ci-environment",
+          "name": "CI Environment",
+          "values": [
+            {
+              "key": "baseUrl",
+              "value": "http://localhost:3000",
+              "enabled": true
+            },
+            {
+              "key": "apiKey",
+              "value": "test-api-key",
+              "enabled": true
+            },
+            {
+              "key": "timeout",
+              "value": "30000",
+              "enabled": true
+            }
+          ]
+        }
+        EOF
+
+    - name: 📊 Setup Test Reporting
+      shell: bash
+      run: |
+        # Create test results directories
+        mkdir -p \
+          test-results \
+          coverage \
+          reports/junit \
+          reports/html \
+          reports/json \
+          screenshots \
+          videos \
+          traces
+          
+        # Install reporting tools
+        npm install -g \
+          mochawesome \
+          jest-html-reporter \
+          allure-commandline \
+          junit-report-builder
+
+    - name: 🔧 Configure Test Environment Variables
+      shell: bash
+      run: |
+        # Set up environment variables for testing
+        cat >> $GITHUB_ENV << EOF
+        NODE_ENV=test
+        DATABASE_URL=${{ inputs.database-url }}
+        REDIS_URL=redis://localhost:6379
+        TEST_SUITE=${{ inputs.test-suite }}
+        BROWSER=${{ inputs.browser }}
+        CI=true
+        FORCE_COLOR=1
+        PLAYWRIGHT_BROWSERS_PATH=~/.cache/playwright
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+        EOF
+
+    - name: 🏥 Setup Healthcare-Specific Test Data
+      shell: bash
+      run: |
+        # Create healthcare test fixtures
+        mkdir -p tests/fixtures/healthcare
+
+        # Generate FHIR test data
+        cat > tests/fixtures/healthcare/patient-test-data.json << EOF
+        {
+          "resourceType": "Patient",
+          "id": "test-patient-001",
+          "identifier": [
+            {
+              "use": "usual",
+              "type": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+                    "code": "MR"
+                  }
+                ]
+              },
+              "system": "urn:oid:1.2.36.146.595.217.0.1",
+              "value": "TEST001"
+            }
+          ],
+          "active": true,
+          "name": [
+            {
+              "use": "official",
+              "family": "TestPatient",
+              "given": ["John", "Doe"]
+            }
+          ],
+          "gender": "male",
+          "birthDate": "1990-01-01"
+        }
+        EOF
+
+    - name: ✅ Verify Test Environment
+      shell: bash
+      run: |
+        echo "🔍 Verifying test environment setup..."
+
+        # Verify test suite specific tools
+        case "${{ inputs.test-suite }}" in
+          *e2e*)
+            npx playwright --version
+            ;;
+          *performance*)
+            k6 version
+            ;;
+          *security*)
+            docker run --rm owasp/zap2docker-stable zap.sh -version
+            ;;
+          *accessibility*)
+            axe --version
+            lighthouse --version
+            ;;
+        esac
+
+        # Verify common test tools
+        jest --version
+        npm test -- --version 2>/dev/null || echo "No test script version available"
+
+        echo "✅ Test environment setup complete for: ${{ inputs.test-suite }}"

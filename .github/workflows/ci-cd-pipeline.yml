@@ -1,0 +1,516 @@
+name: Enterprise CI/CD Pipeline
+true:
+  push:
+    branches:
+      - main
+      - develop
+      - enterprise-implementation
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    - cron: 0 2 * * *
+env:
+  NODE_VERSION: 18.x
+  JAVA_VERSION: "17"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+jobs:
+  code-quality:
+    name: Code Quality & Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+      - name: Install Dependencies
+        run: 'npm ci
+
+          cd microservices && find . -name "pom.xml" -execdir mvn dependency: resolve
+          \;
+
+          '
+      - name: TypeScript Type Checking
+        run: "npx tsc --noEmit --strict\necho \"\u2705 TypeScript type checking passed\"\
+          \n"
+      - name: ESLint Analysis
+        run: "npx eslint . --ext .ts,.tsx,.js,.jsx --format=json --output-file=eslint-report.json
+
+          npx eslint . --ext .ts,.tsx,.js,.jsx --format=stylish
+
+          "
+      - name: Prettier Code Formatting Check
+        run: 'npx prettier --check "**/*.{ts,tsx,js,jsx,json,md,yml,yaml}"
+
+          '
+      - name: Dependency Vulnerability Audit
+        run: "npm audit --audit-level=moderate --json > npm-audit.json
+
+          npm audit --audit-level=moderate
+
+          "
+      - name: License Compliance Check
+        run: 'npx license-checker --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC"
+          --json > license-report.json
+
+          '
+      - name: Upload Code Quality Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-quality-reports
+          path: "eslint-report.json
+
+            npm-audit.json
+
+            license-report.json
+
+            "
+          retention-days: 30
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: code-quality
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript, java
+          queries: security-extended,security-and-quality
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+      - name: Build Applications
+        run: 'npm ci
+
+          npm run build
+
+          cd microservices && find . -name "pom.xml" -execdir mvn clean compile \;
+
+          '
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript
+      - name: SAST with Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/security-audit p/secrets p/ci p/owasp-top-ten p/javascript p/java
+            p/docker p/kubernetes
+          generateSarif: "1"
+      - name: Snyk Security Scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --json > snyk-report.json
+      - name: Docker Security Scan with Trivy
+        run: "docker build -t hms-security-scan .
+
+          curl -sfL https: //raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh
+          | sh -s -- -b /usr/local/bin
+
+          trivy image --exit-code 1 --severity HIGH,CRITICAL --format json --output
+          trivy-report.json hms-security-scan
+
+          "
+      - name: Infrastructure as Code Security Scan
+        run: "# Install Checkov
+
+          pip install checkov
+
+          checkov --framework dockerfile --file Dockerfile --output json > checkov-dockerfile.json
+
+          checkov --framework kubernetes --directory k8s --output json > checkov-k8s.json
+
+          "
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: "snyk-report.json
+
+            trivy-report.json
+
+            checkov-*.json
+
+            "
+          retention-days: 90
+  test-frontend:
+    name: Frontend Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install Dependencies
+        run: npm ci
+      - name: Run Unit Tests
+        run: "npm run test: unit -- --coverage --ci --watchAll=false --passWithNoTests
+
+          "
+      - name: Run Integration Tests
+        run: "npm run test: integration -- --ci --watchAll=false --passWithNoTests
+
+          "
+      - name: Upload Test Coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: true
+  test-microservices:
+    name: Microservices Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        service:
+          - service-discovery
+          - config-server
+          - analytics-data-ingestion
+          - procedure-management
+          - patient-management
+          - provider-mobile-backend
+          - patient-portal-backend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+      - name: Run Unit Tests
+        working-directory: microservices/${{ matrix.service }}
+        run: "mvn clean test -Dtest.profile=unit jacoco: report
+
+          "
+      - name: Run Integration Tests
+        working-directory: microservices/${{ matrix.service }}
+        run: "mvn clean verify -Dtest.profile=integration jacoco: report
+
+          "
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.service }}
+          path: microservices/${{ matrix.service }}/target/site/jacoco/
+          retention-days: 30
+  e2e-testing:
+    name: End-to-End Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - test-frontend
+      - test-microservices
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: hms_test
+          POSTGRES_USER: hms_user
+          POSTGRES_PASSWORD: hms_password
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432: 5432
+      redis:
+        image: redis:7-alpine
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout
+          5s --health-retries 5
+        ports:
+          - 6379: 6379
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+      - name: Install Dependencies
+        run: "npm ci
+
+          npx playwright install --with-deps
+
+          "
+      - name: Start Test Environment
+        run: "docker-compose -f docker-compose.test.yml up -d
+
+          npm run wait-for-services
+
+          "
+      - name: Run E2E Tests
+        run: "npm run test: e2e -- --reporter=html
+
+          "
+      - name: Upload E2E Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: "playwright-report/
+
+            test-results/
+
+            "
+          retention-days: 30
+  performance-testing:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: e2e-testing
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup K6
+        run:
+          "curl https: //github.com/grafana/k6/releases/download/v0.47.0/k6-v0.47.0-linux-amd64.tar.gz
+          -L | tar xvz --strip-components 1
+
+          "
+      - name: Run Performance Tests
+        run: "./k6 run tests/performance/load-test.js --out json=performance-results.json
+
+          ./k6 run tests/stress/stress-test.js --out json=stress-results.json
+
+          "
+      - name: Upload Performance Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-reports
+          path: "performance-results.json
+
+            stress-results.json
+
+            "
+          retention-days: 90
+  sonarqube-analysis:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - test-frontend
+      - test-microservices
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+      - name: Install Dependencies and Run Tests
+        run: "npm ci
+
+          npm run test: unit -- --coverage --ci --watchAll=false --passWithNoTests
+
+          "
+      - name: SonarQube Scan
+        uses: sonarqube-scanner-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: "-Dsonar.projectKey=hospital-management-system -Dsonar.organization=hms-enterprise
+            -Dsonar.sources=src,microservices -Dsonar.tests=src,microservices -Dsonar.inclusions=**/*.ts,**/*.tsx,**/*.js,**/*.jsx,**/*.java
+            -Dsonar.test.inclusions=**/*.test.*,**/*.spec.* -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.coverage.exclusions=**/*.test.*,**/*.spec.*,**/node_modules/** -Dsonar.qualitygate.wait=true
+
+            "
+  build-and-containerize:
+    name: Build and Containerize
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - code-quality
+      - security-scan
+    strategy:
+      matrix:
+        component:
+          - frontend
+          - microservices
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.component }}
+          tags: "type=ref,event=branch
+
+            type=ref,event=pr
+
+            type=sha,prefix={{branch}}-
+
+            type=raw,value=latest,enable={{is_default_branch}}
+
+            "
+      - name: Build and Push Container Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.component }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - build-and-containerize
+      - sonarqube-analysis
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/enterprise-implementation'
+    environment: staging
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: v1.28.0
+      - name: Deploy to Staging
+        run: 'echo "Deploying to staging environment..."
+
+          kubectl apply -f k8s/staging/ --validate=false
+
+          kubectl rollout status deployment/hms-frontend -n staging --timeout=300s
+
+          kubectl rollout status deployment/hms-microservices -n staging --timeout=300s
+
+          '
+      - name: Run Smoke Tests
+        run: "npm run test: smoke -- --env=staging
+
+          "
+      - name: Deploy Monitoring
+        run: "kubectl apply -f k8s/monitoring/ -n staging\necho \"\u2705 Staging deployment\
+          \ completed successfully\"\n"
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - deploy-staging
+      - performance-testing
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: v1.28.0
+      - name: Blue-Green Deployment
+        run: "echo \"Starting Blue-Green deployment to production...\"\nkubectl apply\
+          \ -f k8s/production/ --validate=false\nkubectl apply -f k8s/deployment/blue-green-deployment.yaml\n\
+          \n# Wait for green deployment to be ready\nkubectl rollout status deployment/hms-green\
+          \ -n production --timeout=600s\n\n# Run production smoke tests on green environment\n\
+          npm run test: smoke -- --env=production-green\n\n# Switch traffic to green\n\
+          kubectl patch service hms-service -n production -p '{\"spec\": {\"selector\"\
+          :{\"version\":\"green\"}}}'\n\necho \"\u2705 Production deployment completed\
+          \ successfully\"\n"
+      - name: Post-Deployment Monitoring
+        run:
+          "# Enable enhanced monitoring\nkubectl apply -f k8s/monitoring/production-alerts.yaml\n\
+          echo \"\U0001F680 Production monitoring activated\"\n"
+  compliance-reporting:
+    name: Security Compliance Reporting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - security-scan
+      - sonarqube-analysis
+    if: always()
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Download All Reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports/
+      - name: Generate Compliance Report
+        run: "python scripts/compliance/generate-compliance-report.py
+
+          "
+      - name: Upload Compliance Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-report
+          path: compliance-report.html
+          retention-days: 365
+      - name: Send Compliance Notification
+        if: failure()
+        run: "echo \"\U0001F6A8 Compliance issues detected - Check reports for details\"\
+          \n# In production: Send to security team\n"
+"on":
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop

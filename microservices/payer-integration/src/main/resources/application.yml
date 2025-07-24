@@ -1,0 +1,61 @@
+server:
+  port: 8093
+  servlet:
+    context-path: /payer-integration
+
+spring:
+  application:
+    name: payer-integration-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hms_payer_integration
+    username: ${DB_USERNAME:hms_user}
+    password: ${DB_PASSWORD:hms_password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 4
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+hms:
+  payer-integration:
+    edi:
+      enabled: true
+      transaction-sets: ["837", "835", "270", "271"]
+    clearinghouses:
+      primary:
+        endpoint: ${CLEARINGHOUSE_ENDPOINT:}
+        credentials: ${CLEARINGHOUSE_CREDENTIALS:}

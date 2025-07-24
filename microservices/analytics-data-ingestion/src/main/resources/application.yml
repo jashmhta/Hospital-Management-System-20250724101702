@@ -1,0 +1,40 @@
+server:
+  port: 8095
+  servlet:
+    context-path: /analytics-ingestion
+
+spring:
+  application:
+    name: analytics-data-ingestion-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hms_analytics_ingestion
+    username: ${DB_USERNAME:hms_user}
+    password: ${DB_PASSWORD:hms_password}
+    driver-class-name: org.postgresql.Driver
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    streams:
+      application-id: analytics-ingestion-streams
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 6
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+
+hms:
+  analytics:
+    spark:
+      master: ${SPARK_MASTER:local[*]}
+      app-name: HMS-Analytics-Ingestion
+    data-sources:
+      patient-service: http://localhost:8081
+      billing-service: http://localhost:8083
+      clinical-service: http://localhost:8084

@@ -1,0 +1,340 @@
+server:
+  port: ${SERVER_PORT:8888}
+  servlet:
+    context-path: /
+  shutdown: graceful
+
+spring:
+  application:
+    name: hms-config-server
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:native}
+
+  cloud:
+    config:
+      server:
+        # Git repository configuration (primary)
+        git:
+          uri: ${CONFIG_GIT_URI:https://github.com/your-org/hms-config-repo.git}
+          clone-on-start: true
+          delete-untracked-branches: true
+          force-pull: true
+          refresh-rate: 60
+          timeout: 10
+          default-label: main
+          search-paths:
+            - "{application}"
+            - "{application}/{profile}"
+            - "shared"
+            - "shared/{profile}"
+          repos:
+            development:
+              pattern: "*/development"
+              uri: ${CONFIG_GIT_URI:https://github.com/your-org/hms-config-repo.git}
+              search-paths: "development"
+            production:
+              pattern: "*/production"
+              uri: ${CONFIG_GIT_URI:https://github.com/your-org/hms-config-repo.git}
+              search-paths: "production"
+
+        # Native file system configuration (fallback/development)
+        native:
+          search-locations:
+            - classpath:/config/
+            - classpath:/config/{application}/
+            - classpath:/config/{profile}/
+            - file:./config/
+            - file:./config/{application}/
+            - file:./config/{profile}/
+
+        # Health check configuration
+        health:
+          repositories:
+            development:
+              label: main
+              name: development
+              profiles: development
+            production:
+              label: main
+              name: production
+              profiles: production
+
+        # Configuration encryption
+        encrypt:
+          enabled: true
+          key-store:
+            location: ${CONFIG_KEYSTORE_LOCATION:classpath:server.jks}
+            password: ${CONFIG_KEYSTORE_PASSWORD:changeme}
+            alias: ${CONFIG_KEYSTORE_ALIAS:mytestkey}
+            secret: ${CONFIG_KEYSTORE_SECRET:changeme}
+
+        # Configuration overrides (system-level defaults)
+        overrides:
+          spring:
+            sleuth:
+              zipkin:
+                base-url: ${ZIPKIN_BASE_URL:http://localhost:9411}
+          eureka:
+            client:
+              service-url:
+                defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka}
+          management:
+            endpoints:
+              web:
+                exposure:
+                  include: health,info,metrics,prometheus
+
+        # Fail fast if config server is not available
+        fail-fast: true
+        retry:
+          initial-interval: 1000
+          max-attempts: 6
+          max-interval: 2000
+          multiplier: 1.1
+
+  security:
+    user:
+      name: ${CONFIG_USER:configuser}
+      password: ${CONFIG_PASSWORD:configpass123}
+      roles: ADMIN
+
+  sleuth:
+    zipkin:
+      base-url: ${ZIPKIN_BASE_URL:http://localhost:9411}
+    sampler:
+      probability: ${SLEUTH_SAMPLE_RATE:0.1}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: "@project.version@"
+      description: "Configuration Management Server"
+
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,configserver,refresh,env,configprops
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+    configserver:
+      enabled: true
+    refresh:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        config.server.requests: true
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+  health:
+    config:
+      enabled: true
+
+# Application Information
+info:
+  app:
+    name: "@project.name@"
+    description: "@project.description@"
+    version: "@project.version@"
+    encoding: "@project.build.sourceEncoding@"
+    java:
+      version: "@java.version@"
+  config:
+    server:
+      git-uri: ${spring.cloud.config.server.git.uri}
+      profiles: ${spring.profiles.active}
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms: ${LOG_LEVEL:INFO}
+    org.springframework.cloud.config: ${CONFIG_LOG_LEVEL:INFO}
+    org.springframework.cloud.netflix.eureka: INFO
+    org.springframework.security: WARN
+    org.springframework.web: INFO
+    org.eclipse.jgit: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: logs/config-server.log
+    max-size: 100MB
+    max-history: 30
+
+# Environment specific configurations
+---
+spring:
+  config:
+    activate:
+      on-profile: git
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_GIT_URI:https://github.com/your-org/hms-config-repo.git}
+          username: ${CONFIG_GIT_USERNAME:}
+          password: ${CONFIG_GIT_PASSWORD:}
+          clone-on-start: true
+          force-pull: true
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_GIT_URI:https://github.com/your-org/hms-config-repo.git}
+          clone-on-start: true
+        native:
+          search-locations:
+            - file:/config/
+            - file:/config/{application}/
+            - file:/config/{profile}/
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://service-discovery:8761/eureka
+
+---
+spring:
+  config:
+    activate:
+      on-profile: vault
+  cloud:
+    config:
+      server:
+        vault:
+          host: ${VAULT_HOST:localhost}
+          port: ${VAULT_PORT:8200}
+          scheme: ${VAULT_SCHEME:http}
+          backend: ${VAULT_BACKEND:secret}
+          default-key: ${VAULT_DEFAULT_KEY:application}
+          profile-separator: ${VAULT_PROFILE_SEPARATOR:/}
+          token: ${VAULT_TOKEN:}
+          kv-version: 2
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+  security:
+    user:
+      password: ${CONFIG_PASSWORD:verySecureProductionPassword123!}
+  cloud:
+    config:
+      server:
+        git:
+          force-pull: false
+          refresh-rate: 300 # 5 minutes in production
+
+logging:
+  level:
+    com.hospital.hms: INFO
+    org.springframework.cloud.config: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+
+management:
+  endpoint:
+    health:
+      show-details: when-authorized
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,configserver
+
+---
+spring:
+  config:
+    activate:
+      on-profile: development
+  cloud:
+    config:
+      server:
+        git:
+          clone-on-start: false
+          force-pull: true
+          refresh-rate: 10 # Fast refresh in development
+
+logging:
+  level:
+    com.hospital.hms: DEBUG
+    org.springframework.cloud.config: DEBUG
+    org.eclipse.jgit: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: native
+  cloud:
+    config:
+      server:
+        native:
+          search-locations:
+            - classpath:/config/
+            - classpath:/config/{application}/
+            - file:./config/
+---
+# HMS-specific Configuration Management Settings
+hms:
+  config:
+    security:
+      encryption-key: ${HMS_CONFIG_ENCRYPTION_KEY:hms-config-encryption-key-2024}
+      jwt-secret: ${HMS_CONFIG_JWT_SECRET:hms-config-jwt-secret-2024}
+      jwt-expiration: 86400000 # 24 hours
+    validation:
+      hipaa-compliance: true
+      sensitive-property-validation: true
+      healthcare-service-validation: true
+    monitoring:
+      enabled: true
+      health-check-interval: 30s
+      metrics-collection-interval: 60s
+      configuration-cache-enabled: true
+    healthcare:
+      critical-services:
+        - patient-management
+        - emergency-service
+        - clinical-documentation
+        - pharmacy-service
+        - billing-service
+        - appointment-scheduling
+      compliance:
+        audit-logging: true
+        property-encryption: true
+        access-control: strict
+        data-classification: enabled
+      encryption:
+        algorithm: AES
+        key-size: 256
+        secure-random: true

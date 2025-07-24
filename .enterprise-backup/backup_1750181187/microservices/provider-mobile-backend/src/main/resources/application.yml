@@ -1,0 +1,407 @@
+# HMS Provider Mobile Backend Service Configuration
+server:
+  port: ${SERVER_PORT:8097}
+  servlet:
+    context-path: /provider-mobile
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
+
+spring:
+  application:
+    name: hms-provider-mobile-backend
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:development}
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hms_provider_mobile
+    username: ${DB_USERNAME:hms_user}
+    password: ${DB_PASSWORD:hms_password}
+    driver-class-name: org.postgresql.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 8
+
+  websocket:
+    enabled: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+
+hms:
+  provider-mobile:
+    security:
+      session-timeout-minutes: 480 # 8 hours
+      idle-timeout-minutes: 30
+      max-concurrent-sessions: 3
+      require-biometric-auth: true
+    clinical-decision-support:
+      enabled: true
+      drug-interaction-alerts: true
+      allergy-alerts: true
+      clinical-guidelines: true
+    offline:
+      enabled: true
+      max-cache-size-mb: 500
+      sync-interval-minutes: 15
+    notifications:
+      firebase:
+        project-id: ${FIREBASE_PROJECT_ID:}
+        private-key: ${FIREBASE_PRIVATE_KEY:}
+      clinical-alerts: true
+      patient-updates: true
+      schedule-changes: true
+    integration:
+      emr-service: http://localhost:8081
+      lab-service: http://localhost:8082
+      pharmacy-service: http://localhost:8083
+      imaging-service: http://localhost:8084
+
+---
+# HMS Provider Mobile Backend Enhanced Configuration
+
+# Database Configuration
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+    show-sql: false
+    open-in-view: false
+
+  # Caching Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000 # 5 minutes
+      cache-null-values: false
+    cache-names:
+      - validSessions
+      - activeProviders
+      - providerProfiles
+      - clinicalData
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/auth/realms/hms/protocol/openid_connect/certs}
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,sessions,providers
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    com.hms.providermobile: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    root: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/provider-mobile-backend.log
+    max-size: 100MB
+    max-history: 30
+
+# Custom HMS Provider Mobile Configuration
+hms:
+  provider-mobile:
+    # Security Configuration
+    security:
+      session-management:
+        session-timeout-minutes: 480 # 8 hours
+        refresh-token-duration-days: 30
+        idle-timeout-minutes: 30
+        max-concurrent-sessions: 3
+        cleanup-expired-sessions-hours: 24
+      authentication:
+        require-biometric-auth: false # Optional biometric
+        max-failed-attempts: 5
+        lockout-duration-minutes: 30
+        password-complexity-enabled: true
+        two-factor-auth-enabled: true
+      device-management:
+        max-devices-per-provider: 5
+        device-registration-required: true
+        device-fingerprinting-enabled: true
+      encryption:
+        algorithm: AES-256-GCM
+        key-rotation-days: 90
+        data-at-rest-encryption: true
+        data-in-transit-encryption: true
+
+    # Mobile Application Features
+    mobile-features:
+      patient-access:
+        enabled: true
+        view-patient-list: true
+        view-patient-details: true
+        update-patient-notes: true
+        view-medical-history: true
+        access-lab-results: true
+        view-imaging-studies: true
+      clinical-workflow:
+        enabled: true
+        clinical-documentation: true
+        e-prescribing: true
+        order-entry: true
+        clinical-alerts: true
+        drug-interaction-checking: true
+        allergy-checking: true
+      scheduling:
+        enabled: true
+        view-schedule: true
+        modify-appointments: true
+        emergency-scheduling: true
+        on-call-management: true
+      communication:
+        enabled: true
+        secure-messaging: true
+        video-consultations: true
+        voice-calls: true
+        team-collaboration: true
+
+    # Performance Configuration
+    performance:
+      api-rate-limiting:
+        enabled: true
+        requests-per-minute: 100
+        burst-capacity: 200
+      data-pagination:
+        default-page-size: 20
+        max-page-size: 100
+      caching:
+        provider-cache-ttl-minutes: 30
+        session-cache-ttl-minutes: 15
+        clinical-data-cache-ttl-minutes: 10
+      async-processing:
+        core-pool-size: 5
+        max-pool-size: 20
+        queue-capacity: 100
+
+    # Offline Capabilities
+    offline:
+      enabled: true
+      sync-strategy: incremental
+      max-cache-size-mb: 500
+      sync-interval-minutes: 15
+      critical-data-priority: true
+      conflict-resolution: server-wins
+      offline-data-retention-days: 7
+
+    # Push Notifications
+    notifications:
+      firebase:
+        enabled: true
+        project-id: ${FIREBASE_PROJECT_ID:hms-provider-mobile}
+        private-key-path: ${FIREBASE_PRIVATE_KEY_PATH:/config/firebase-key.json}
+        database-url: ${FIREBASE_DATABASE_URL:}
+      notification-types:
+        critical-alerts: true
+        patient-updates: true
+        schedule-changes: true
+        medication-reminders: false
+        system-maintenance: true
+      delivery:
+        retry-attempts: 3
+        retry-delay-seconds: 5
+        batch-size: 100
+
+    # Clinical Decision Support
+    clinical-decision-support:
+      enabled: true
+      features:
+        drug-interaction-alerts: true
+        allergy-alerts: true
+        clinical-guidelines: true
+        diagnostic-assistance: true
+        treatment-recommendations: true
+        drug-dosing-guidance: true
+      severity-levels:
+        - CRITICAL
+        - HIGH
+        - MEDIUM
+        - LOW
+      alert-delivery:
+        real-time-alerts: true
+        batch-processing: false
+        notification-sound: true
+
+    # HIPAA Compliance
+    hipaa:
+      enabled: true
+      audit-logging:
+        enabled: true
+        log-all-access: true
+        log-failed-attempts: true
+        retention-days: 2555 # 7 years
+      data-protection:
+        field-level-encryption: true
+        phi-masking: true
+        access-controls: true
+        minimum-necessary-standard: true
+      user-agreements:
+        require-acceptance: true
+        annual-reconfirmation: true
+        track-agreements: true
+
+    # Integration Configuration
+    integration:
+      timeout-seconds: 30
+      retry-attempts: 3
+      circuit-breaker:
+        enabled: true
+        failure-threshold: 5
+        timeout-duration-seconds: 60
+        half-open-max-calls: 3
+      services:
+        patient-management:
+          url: ${PATIENT_SERVICE_URL:http://patient-management-service}
+          timeout-seconds: 10
+        clinical-documentation:
+          url: ${CLINICAL_DOCS_URL:http://clinical-notes-service}
+          timeout-seconds: 15
+        laboratory:
+          url: ${LAB_SERVICE_URL:http://laboratory-service}
+          timeout-seconds: 10
+        pharmacy:
+          url: ${PHARMACY_SERVICE_URL:http://pharmacy-service}
+          timeout-seconds: 10
+        radiology:
+          url: ${RADIOLOGY_SERVICE_URL:http://radiology-service}
+          timeout-seconds: 20
+        billing:
+          url: ${BILLING_SERVICE_URL:http://billing-service}
+          timeout-seconds: 10
+
+    # Emergency Features
+    emergency:
+      enabled: true
+      features:
+        emergency-alerts: true
+        critical-patient-access: true
+        emergency-contacts: true
+        rapid-response-team: true
+        code-blue-notifications: true
+      response-times:
+        critical-alert-seconds: 5
+        emergency-notification-seconds: 10
+        escalation-timeout-minutes: 2
+
+    # Analytics and Reporting
+    analytics:
+      enabled: true
+      data-collection:
+        user-behavior: true
+        performance-metrics: true
+        error-tracking: true
+        feature-usage: true
+      retention:
+        analytics-data-days: 90
+        performance-data-days: 30
+        error-logs-days: 60
+
+---
+# Environment-specific configurations
+
+spring:
+  config:
+    activate:
+      on-profile: development
+
+hms:
+  provider-mobile:
+    security:
+      authentication:
+        require-biometric-auth: false
+        two-factor-auth-enabled: false
+    mobile-features:
+      clinical-workflow:
+        drug-interaction-checking: false # Disable for dev testing
+
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+
+hms:
+  provider-mobile:
+    security:
+      authentication:
+        require-biometric-auth: true
+        two-factor-auth-enabled: true
+        password-complexity-enabled: true
+      encryption:
+        data-at-rest-encryption: true
+        data-in-transit-encryption: true
+    hipaa:
+      enabled: true
+      audit-logging:
+        enabled: true
+        log-all-access: true
+    performance:
+      api-rate-limiting:
+        enabled: true
+        requests-per-minute: 60 # Stricter in production

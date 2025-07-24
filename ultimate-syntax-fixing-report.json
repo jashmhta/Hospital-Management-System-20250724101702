@@ -1,0 +1,12 @@
+{
+  "success": false,
+  "duration": 45.34124517440796,
+  "syntax_fixes_applied": 795,
+  "final_errors": {
+    "typescript": 0,
+    "eslint": 1,
+    "prettier": 4215,
+    "build": 47,
+    "total": 4263
+  }
+}

@@ -1,0 +1,130 @@
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: hms-jaeger
+  namespace: observability
+spec:
+  strategy: production
+  storage:
+    type: elasticsearch
+    elasticsearch:
+      nodeCount: 3
+      resources:
+        requests:
+          cpu: 1
+          memory: 2Gi
+        limits:
+          cpu: 2
+          memory: 4Gi
+      storage:
+        size: 100Gi
+      redundancyPolicy: SingleRedundancy
+  ingress:
+    enabled: true
+    security: oauth-proxy
+    openshift:
+      sar: '{"namespace": "observability", "resource": "pods", "verb": "get"}'
+    options:
+      cookie-secret: COOKIE_SECRET
+      pass-basic-auth: true
+      pass-user-headers: true
+  annotations:
+    scheduler.alpha.kubernetes.io/critical-pod: ""
+  query:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1
+        memory: 2Gi
+  collector:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 1
+        memory: 2Gi
+  agent:
+    strategy: sidecar
+    resources:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+      limits:
+        cpu: 200m
+        memory: 200Mi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-sampling-config
+  namespace: observability
+data:
+  sampling.json: |
+    {
+      "service_strategies": [
+        {
+          "service": "patient-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "appointment-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "billing-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "pharmacy-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "laboratory-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "radiology-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "ipd-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "opd-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "analytics-service",
+          "type": "probabilistic",
+          "param": 0.5
+        },
+        {
+          "service": "cdss-service",
+          "type": "probabilistic",
+          "param": 1.0
+        },
+        {
+          "service": "auth-service",
+          "type": "probabilistic",
+          "param": 0.3
+        }
+      ],
+      "default_strategy": {
+        "type": "probabilistic",
+        "param": 0.1
+      }
+    }

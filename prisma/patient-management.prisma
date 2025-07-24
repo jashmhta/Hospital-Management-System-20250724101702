@@ -1,0 +1,790 @@
+// Patient Management Schema
+// This schema extends the Hospital Management System with comprehensive patient management functionality
+
+// Patient model - core patient information
+model Patient {
+  id                   String                @id @default(uuid())
+  mrn                  String                @unique // Medical Record Number
+  registrationDate     DateTime              @default(now())
+  status               String                @default("Active") // Active, Inactive, Deceased
+  title                String?
+  firstName            String
+  middleName           String?
+  lastName             String
+  preferredName        String?
+  dateOfBirth          DateTime
+  gender               String                // Male, Female, Other
+  biologicalSex        String?               // Male, Female, Intersex
+  genderIdentity       String?
+  pronouns             String?
+  maritalStatus        String?
+  occupation           String?
+  language             String                @default("English")
+  interpreter          Boolean               @default(false)
+  ethnicity            String?
+  race                 String?
+  nationality          String?
+  religion             String?
+  educationLevel       String?
+  bloodType            String?
+  rh                   String?
+  organDonor           Boolean               @default(false)
+  deceasedDate         DateTime?
+  deceasedReason       String?
+  vip                  Boolean               @default(false)
+  confidential         Boolean               @default(false)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Contact information
+  contact              PatientContact?
+  
+  // Relations
+  demographics         PatientDemographics?
+  identifications      PatientIdentification[]
+  contacts             EmergencyContact[]
+  addresses            PatientAddress[]
+  familyMembers        PatientFamilyMember[] @relation("PatientToFamilyMember")
+  relatedTo            PatientFamilyMember[] @relation("FamilyMemberToPatient")
+  consents             PatientConsent[]
+  insurances           PatientInsurance[]
+  allergies            PatientAllergy[]
+  conditions           PatientCondition[]
+  documents            PatientDocument[]
+  appointments         Appointment[]
+  visits               PatientVisit[]
+  prescriptions        Prescription[]
+  vitalSigns           VitalSign[]
+  immunizations        Immunization[]
+  referrals            Referral[]
+  medicalAlerts        MedicalAlert[]
+  advanceDirectives    AdvanceDirective[]
+  careTeams            PatientCareTeam[]
+  patientPortal        PatientPortalAccount?
+  flags                PatientFlag[]
+  notes                PatientNote[]
+  communications       PatientCommunication[]
+  attachments          PatientAttachment[]
+  auditLogs            PatientAuditLog[]
+  preferences          PatientPreference?
+  
+  @@index([mrn])
+  @@index([lastName, firstName])
+  @@index([dateOfBirth])
+  @@index([status])
+}
+
+// PatientContact model - primary contact information
+model PatientContact {
+  id                   String                @id @default(uuid())
+  patientId            String                @unique
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  phoneHome            String?
+  phoneMobile          String?
+  phoneWork            String?
+  phonePreferred       String                // Home, Mobile, Work
+  email                String?
+  emailOptIn           Boolean               @default(false)
+  smsOptIn             Boolean               @default(false)
+  mailOptIn            Boolean               @default(true)
+  doNotContact         Boolean               @default(false)
+  doNotContactReason   String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([phoneMobile])
+  @@index([email])
+}
+
+// PatientDemographics model - additional demographic information
+model PatientDemographics {
+  id                   String                @id @default(uuid())
+  patientId            String                @unique
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  incomeRange          String?
+  employmentStatus     String?
+  employerName         String?
+  employerPhone        String?
+  employerAddress      String?
+  studentStatus        String?
+  schoolName           String?
+  livingArrangement    String?
+  numberOfDependents   Int?
+  veteranStatus        Boolean               @default(false)
+  disabilityStatus     Boolean               @default(false)
+  disabilityType       String?
+  primaryLanguage      String?
+  secondaryLanguages   String[]
+  needsInterpreter     Boolean               @default(false)
+  interpreterType      String?
+  immigrationStatus    String?
+  countryOfOrigin      String?
+  yearOfEntry          Int?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+}
+
+// PatientIdentification model - identification documents
+model PatientIdentification {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  idType               String                // SSN, Passport, Driver's License, etc.
+  idNumber             String
+  issuingCountry       String?
+  issuingState         String?
+  issueDate            DateTime?
+  expirationDate       DateTime?
+  isPrimary            Boolean               @default(false)
+  documentImageUrl     String?
+  verificationStatus   String                @default("Unverified") // Unverified, Pending, Verified
+  verifiedBy           String?
+  verifiedDate         DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([idType])
+  @@index([idNumber])
+}
+
+// PatientAddress model - patient addresses (can have multiple)
+model PatientAddress {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  addressType          String                // Home, Work, Temporary, Billing, etc.
+  isPrimary            Boolean               @default(false)
+  addressLine1         String
+  addressLine2         String?
+  city                 String
+  state                String?
+  postalCode           String
+  country              String                @default("USA")
+  county               String?
+  validFrom            DateTime              @default(now())
+  validTo              DateTime?
+  isBilling            Boolean               @default(false)
+  isShipping           Boolean               @default(false)
+  verificationStatus   String                @default("Unverified") // Unverified, Pending, Verified
+  verifiedBy           String?
+  verifiedDate         DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([addressType])
+  @@index([isPrimary])
+}
+
+// EmergencyContact model - emergency contacts
+model EmergencyContact {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  firstName            String
+  lastName             String
+  relationship         String
+  isPrimary            Boolean               @default(false)
+  phoneHome            String?
+  phoneMobile          String?
+  phoneWork            String?
+  phonePreferred       String                // Home, Mobile, Work
+  email                String?
+  addressLine1         String?
+  addressLine2         String?
+  city                 String?
+  state                String?
+  postalCode           String?
+  country              String?
+  isLegalGuardian      Boolean               @default(false)
+  hasDecisionMaking    Boolean               @default(false)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([relationship])
+  @@index([isPrimary])
+}
+
+// PatientFamilyMember model - family relationships
+model PatientFamilyMember {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation("PatientToFamilyMember", fields: [patientId], references: [id], onDelete: Cascade)
+  relatedPatientId     String
+  relatedPatient       Patient               @relation("FamilyMemberToPatient", fields: [relatedPatientId], references: [id], onDelete: Cascade)
+  relationship         String                // Parent, Child, Sibling, Spouse, etc.
+  isEmergencyContact   Boolean               @default(false)
+  isLegalGuardian      Boolean               @default(false)
+  hasHealthProxy       Boolean               @default(false)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@unique([patientId, relatedPatientId, relationship])
+  @@index([patientId])
+  @@index([relatedPatientId])
+  @@index([relationship])
+}
+
+// PatientConsent model - patient consents
+model PatientConsent {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consentType          String                // Treatment, Research, HIE, Privacy, etc.
+  consentStatus        String                // Granted, Denied, Expired, Revoked
+  startDate            DateTime
+  endDate              DateTime?
+  documentUrl          String?
+  signatureMethod      String?               // Electronic, Paper, Verbal
+  signedBy             String?               // Patient, Legal Guardian, Health Proxy
+  witnessName          String?
+  witnessSignature     Boolean               @default(false)
+  notes                String?
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([consentType])
+  @@index([consentStatus])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+// PatientInsurance model - insurance information
+model PatientInsurance {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  insuranceType        String                // Primary, Secondary, Tertiary
+  payerName            String
+  planName             String?
+  policyNumber         String
+  groupNumber          String?
+  subscriberId         String?
+  subscriberName       String?
+  subscriberRelation   String?               // Self, Spouse, Child, Other
+  startDate            DateTime
+  endDate              DateTime?
+  copayAmount          Decimal?              @db.Decimal(10, 2)
+  coinsuranceRate      Decimal?              @db.Decimal(5, 2)
+  deductibleAmount     Decimal?              @db.Decimal(10, 2)
+  deductibleMet        Decimal?              @db.Decimal(10, 2)
+  outOfPocketMax       Decimal?              @db.Decimal(10, 2)
+  outOfPocketMet       Decimal?              @db.Decimal(10, 2)
+  coverageVerified     Boolean               @default(false)
+  verificationDate     DateTime?
+  verifiedBy           String?
+  cardFrontImageUrl    String?
+  cardBackImageUrl     String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([insuranceType])
+  @@index([payerName])
+  @@index([policyNumber])
+}
+
+// PatientAllergy model - allergies
+model PatientAllergy {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  allergyType          String                // Drug, Food, Environmental
+  allergen             String
+  reaction             String?
+  severity             String                // Mild, Moderate, Severe, Life-threatening
+  status               String                // Active, Inactive, Resolved
+  onsetDate            DateTime?
+  endDate              DateTime?
+  recordedBy           String
+  recordedAt           DateTime              @default(now())
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([allergyType])
+  @@index([allergen])
+  @@index([severity])
+  @@index([status])
+}
+
+// PatientCondition model - medical conditions
+model PatientCondition {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  conditionName        String
+  conditionCode        String?               // ICD-10 code
+  category             String                // Diagnosis, Problem, Symptom
+  status               String                // Active, Inactive, Resolved
+  onsetDate            DateTime?
+  endDate              DateTime?
+  severity             String?               // Mild, Moderate, Severe
+  bodySite             String?
+  stage                String?
+  recordedBy           String
+  recordedAt           DateTime              @default(now())
+  notes                String?
+  isConfidential       Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([conditionName])
+  @@index([conditionCode])
+  @@index([category])
+  @@index([status])
+}
+
+// PatientDocument model - patient documents
+model PatientDocument {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  documentType         String                // Medical Records, ID, Insurance Card, Legal Documents, etc.
+  documentName         String
+  description          String?
+  mimeType             String
+  fileSize             Int
+  fileUrl              String
+  uploadedBy           String
+  uploadedAt           DateTime              @default(now())
+  expirationDate       DateTime?
+  isConfidential       Boolean               @default(false)
+  tags                 String[]
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([documentType])
+  @@index([uploadedAt])
+}
+
+// PatientVisit model - patient visit records
+model PatientVisit {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visitNumber          String                @unique
+  visitType            String                // Outpatient, Inpatient, Emergency, Telehealth
+  startDate            DateTime
+  endDate              DateTime?
+  status               String                // Scheduled, In Progress, Completed, Cancelled, No-Show
+  locationId           String?
+  departmentId         String?
+  providerId           String?
+  reasonForVisit       String?
+  chiefComplaint       String?
+  diagnosis            String[]
+  diagnosisCodes       String[]
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([visitNumber])
+  @@index([visitType])
+  @@index([startDate])
+  @@index([status])
+}
+
+// Appointment model - patient appointments
+model Appointment {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentNumber    String                @unique
+  appointmentType      String                // New Patient, Follow-up, Consultation, etc.
+  status               String                // Scheduled, Confirmed, Completed, Cancelled, No-Show
+  providerId           String
+  departmentId         String?
+  locationId           String
+  startDateTime        DateTime
+  endDateTime          DateTime
+  duration             Int                   // Duration in minutes
+  visitTypeId          String?
+  reasonForVisit       String?
+  notes                String?
+  reminders            Boolean               @default(true)
+  reminderSent         Boolean               @default(false)
+  reminderSentAt       DateTime?
+  checkInTime          DateTime?
+  checkOutTime         DateTime?
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([appointmentNumber])
+  @@index([providerId])
+  @@index([startDateTime])
+  @@index([status])
+}
+
+// Prescription model - medication prescriptions
+model Prescription {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  prescriptionNumber   String                @unique
+  providerId           String
+  medicationName       String
+  medicationCode       String?
+  dosage               String
+  frequency            String
+  route                String
+  quantity             String
+  refills              Int
+  startDate            DateTime
+  endDate              DateTime?
+  instructions         String?
+  isActive             Boolean               @default(true)
+  isPRN                Boolean               @default(false)
+  isControlled         Boolean               @default(false)
+  isBrand              Boolean               @default(false)
+  substituteAllowed    Boolean               @default(true)
+  pharmacyId           String?
+  dispensedDate        DateTime?
+  dispensedBy          String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([prescriptionNumber])
+  @@index([providerId])
+  @@index([medicationName])
+  @@index([isActive])
+}
+
+// VitalSign model - patient vital signs
+model VitalSign {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visitId              String?
+  recordedAt           DateTime
+  recordedBy           String
+  vitalType            String                // BP, HR, Temp, RR, SpO2, Height, Weight, BMI, Pain
+  value                String
+  unit                 String
+  abnormal             Boolean               @default(false)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([visitId])
+  @@index([recordedAt])
+  @@index([vitalType])
+}
+
+// Immunization model - patient immunizations
+model Immunization {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  vaccineCode          String
+  vaccineName          String
+  doseNumber           Int?
+  administeredDate     DateTime
+  administeredBy       String?
+  manufacturer         String?
+  lotNumber            String?
+  expirationDate       DateTime?
+  administrationSite   String?
+  administrationRoute  String?
+  administrationDose   String?
+  administrationUnit   String?
+  vaccinationStatus    String                // Completed, Refused, Partial, Not Done
+  refusalReason        String?
+  adverseEvent         Boolean               @default(false)
+  adverseEventNotes    String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([vaccineCode])
+  @@index([administeredDate])
+  @@index([vaccinationStatus])
+}
+
+// Referral model - patient referrals
+model Referral {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  referralNumber       String                @unique
+  referringProviderId  String
+  receivingProviderId  String
+  referralDate         DateTime
+  referralReason       String
+  referralType         String                // Consultation, Diagnostic, Treatment, Transfer
+  status               String                // Pending, Accepted, Rejected, Completed, Cancelled
+  urgency              String                // Routine, Urgent, Emergency
+  notes                String?
+  attachments          String[]
+  scheduledDate        DateTime?
+  completedDate        DateTime?
+  reportReceived       Boolean               @default(false)
+  reportReceivedDate   DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([referralNumber])
+  @@index([referringProviderId])
+  @@index([receivingProviderId])
+  @@index([referralDate])
+  @@index([status])
+}
+
+// MedicalAlert model - patient medical alerts
+model MedicalAlert {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  alertType            String                // Allergy, Infection, Fall Risk, Advance Directive, etc.
+  alertDescription     String
+  severity             String                // Low, Medium, High, Critical
+  startDate            DateTime              @default(now())
+  endDate              DateTime?
+  isActive             Boolean               @default(true)
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([alertType])
+  @@index([severity])
+  @@index([isActive])
+}
+
+// AdvanceDirective model - patient advance directives
+model AdvanceDirective {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  directiveType        String                // Living Will, Healthcare Proxy, DNR, POLST
+  effectiveDate        DateTime
+  documentUrl          String?
+  verificationStatus   String                // Verified, Pending, Not Verified
+  verifiedBy           String?
+  verifiedDate         DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([directiveType])
+  @@index([verificationStatus])
+}
+
+// PatientCareTeam model - patient care team members
+model PatientCareTeam {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  providerId           String
+  providerName         String
+  providerRole         String                // PCP, Specialist, Nurse, Therapist, etc.
+  departmentId         String?
+  isPrimary            Boolean               @default(false)
+  startDate            DateTime              @default(now())
+  endDate              DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([providerId])
+  @@index([providerRole])
+  @@index([isPrimary])
+}
+
+// PatientPortalAccount model - patient portal access
+model PatientPortalAccount {
+  id                   String                @id @default(uuid())
+  patientId            String                @unique
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  username             String                @unique
+  email                String                @unique
+  isActive             Boolean               @default(true)
+  lastLoginDate        DateTime?
+  registrationDate     DateTime              @default(now())
+  activationDate       DateTime?
+  activationCode       String?
+  passwordResetToken   String?
+  passwordResetExpiry  DateTime?
+  mfaEnabled           Boolean               @default(false)
+  mfaMethod            String?               // SMS, Email, Authenticator
+  mfaPhone             String?
+  mfaEmail             String?
+  securityQuestions    Json?
+  termsAccepted        Boolean               @default(false)
+  termsAcceptedDate    DateTime?
+  privacyAccepted      Boolean               @default(false)
+  privacyAcceptedDate  DateTime?
+  lastPasswordChange   DateTime?
+  failedLoginAttempts  Int                   @default(0)
+  accountLocked        Boolean               @default(false)
+  accountLockedUntil   DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([username])
+  @@index([email])
+  @@index([isActive])
+}
+
+// PatientFlag model - special patient flags
+model PatientFlag {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  flagType             String                // VIP, Do Not Call, Infection Risk, etc.
+  description          String
+  severity             String                // Low, Medium, High, Critical
+  startDate            DateTime              @default(now())
+  endDate              DateTime?
+  isActive             Boolean               @default(true)
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([flagType])
+  @@index([severity])
+  @@index([isActive])
+}
+
+// PatientNote model - clinical and administrative notes
+model PatientNote {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  noteType             String                // Clinical, Administrative, Billing, etc.
+  title                String
+  content              String
+  isConfidential       Boolean               @default(false)
+  authorId             String
+  authorName           String
+  authorRole           String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([noteType])
+  @@index([authorId])
+}
+
+// PatientCommunication model - communication logs
+model PatientCommunication {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  communicationType    String                // Phone, Email, SMS, Letter, Portal
+  direction            String                // Inbound, Outbound
+  subject              String?
+  content              String
+  status               String                // Sent, Delivered, Read, Failed
+  communicationDate    DateTime
+  sentBy               String?
+  recipientName        String?
+  recipientContact     String?
+  attachments          String[]
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([communicationType])
+  @@index([direction])
+  @@index([communicationDate])
+  @@index([status])
+}
+
+// PatientAttachment model - patient files and documents
+model PatientAttachment {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  attachmentType       String                // Clinical, Administrative, Legal, etc.
+  filename             String
+  fileUrl              String
+  mimeType             String
+  fileSize             Int
+  description          String?
+  isConfidential       Boolean               @default(false)
+  uploadedBy           String
+  uploadedAt           DateTime              @default(now())
+  tags                 String[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([attachmentType])
+  @@index([uploadedAt])
+}
+
+// PatientAuditLog model - audit logs for patient record access
+model PatientAuditLog {
+  id                   String                @id @default(uuid())
+  patientId            String
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  action               String                // View, Create, Update, Delete, Print, Export
+  resourceType         String                // Demographics, Insurance, Clinical, etc.
+  resourceId           String?
+  description          String
+  performedBy          String
+  performerRole        String
+  ipAddress            String?
+  userAgent            String?
+  timestamp            DateTime              @default(now())
+  
+  @@index([patientId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([performedBy])
+  @@index([timestamp])
+}
+
+// PatientPreference model - patient preferences
+model PatientPreference {
+  id                   String                @id @default(uuid())
+  patientId            String                @unique
+  patient              Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  preferredProviderId  String?
+  preferredLocationId  String?
+  preferredPharmacyId  String?
+  preferredContactMethod String              // Phone, Email, SMS, Mail
+  preferredTimeOfDay   String?               // Morning, Afternoon, Evening
+  preferredLanguage    String                @default("English")
+  remindersEnabled     Boolean               @default(true)
+  reminderLeadTime     Int                   @default(24) // Hours before appointment
+  portalNotifications  Boolean               @default(true)
+  emailNotifications   Boolean               @default(true)
+  smsNotifications     Boolean               @default(false)
+  mailNotifications    Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+}

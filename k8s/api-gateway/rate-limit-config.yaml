@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ratelimit-config
+  namespace: hms
+data:
+  config.yaml: |
+    domain: hms-api
+    descriptors:
+      # Global rate limit
+      - key: generic_key
+        value: default
+        rate_limit:
+          unit: minute
+          requests_per_unit: 1000
+
+      # Rate limit by API key
+      - key: api_key
+        descriptors:
+          # Bronze tier
+          - key: tier
+            value: bronze
+            rate_limit:
+              unit: minute
+              requests_per_unit: 100
+          # Silver tier
+          - key: tier
+            value: silver
+            rate_limit:
+              unit: minute
+              requests_per_unit: 500
+          # Gold tier
+          - key: tier
+            value: gold
+            rate_limit:
+              unit: minute
+              requests_per_unit: 1000
+          # Platinum tier
+          - key: tier
+            value: platinum
+            rate_limit:
+              unit: minute
+              requests_per_unit: 5000
+
+      # Rate limit by path for patient service
+      - key: path
+        value: /api/patients
+        descriptors:
+          # List operations
+          - key: method
+            value: GET
+            rate_limit:
+              unit: minute
+              requests_per_unit: 300
+          # Search operations (more intensive)
+          - key: subpath
+            value: /search
+            rate_limit:
+              unit: minute
+              requests_per_unit: 150
+          # Create operations
+          - key: method
+            value: POST
+            rate_limit:
+              unit: minute
+              requests_per_unit: 100
+          # Update operations
+          - key: method
+            value: PUT
+            rate_limit:
+              unit: minute
+              requests_per_unit: 150
+          # Delete operations
+          - key: method
+            value: DELETE
+            rate_limit:
+              unit: minute
+              requests_per_unit: 50
+
+      # Rate limit by path for billing service
+      - key: path
+        value: /api/billing
+        descriptors:
+          # List operations
+          - key: method
+            value: GET
+            rate_limit:
+              unit: minute
+              requests_per_unit: 200
+          # Create operations
+          - key: method
+            value: POST
+            rate_limit:
+              unit: minute
+              requests_per_unit: 100
+          # Update operations
+          - key: method
+            value: PUT
+            rate_limit:
+              unit: minute
+              requests_per_unit: 100
+          # Invoice generation (resource intensive)
+          - key: subpath
+            value: /generate-invoice
+            rate_limit:
+              unit: minute
+              requests_per_unit: 50
+
+      # Rate limit by path for analytics service
+      - key: path
+        value: /api/analytics
+        descriptors:
+          # Standard queries
+          - key: method
+            value: GET
+            rate_limit:
+              unit: minute
+              requests_per_unit: 100
+          # Complex reports (resource intensive)
+          - key: subpath
+            value: /reports
+            rate_limit:
+              unit: minute
+              requests_per_unit: 30
+          # Dashboard data
+          - key: subpath
+            value: /dashboards
+            rate_limit:
+              unit: minute
+              requests_per_unit: 120
+          # Predictive analytics (very intensive)
+          - key: subpath
+            value: /predictive
+            rate_limit:
+              unit: minute
+              requests_per_unit: 20
+
+      # Rate limit by source IP
+      - key: remote_address
+        rate_limit:
+          unit: minute
+          requests_per_unit: 300
+
+      # Rate limit for authentication service
+      - key: path
+        value: /api/auth
+        descriptors:
+          # Login attempts
+          - key: subpath
+            value: /login
+            rate_limit:
+              unit: minute
+              requests_per_unit: 30
+          # Token refresh
+          - key: subpath
+            value: /refresh
+            rate_limit:
+              unit: minute
+              requests_per_unit: 60
+          # Registration
+          - key: subpath
+            value: /register
+            rate_limit:
+              unit: minute
+              requests_per_unit: 10
+          # Password reset
+          - key: subpath
+            value: /reset-password
+            rate_limit:
+              unit: minute
+              requests_per_unit: 5
+
+      # GraphQL rate limiting
+      - key: path
+        value: /graphql
+        rate_limit:
+          unit: minute
+          requests_per_unit: 300
+
+      # Emergency services - higher limits
+      - key: path
+        value: /api/emergency
+        rate_limit:
+          unit: minute
+          requests_per_unit: 1000

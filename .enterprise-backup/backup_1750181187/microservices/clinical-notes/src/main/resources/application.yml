@@ -1,0 +1,331 @@
+# Clinical Notes Service Configuration
+server:
+  port: ${SERVER_PORT:8084}
+  servlet:
+    context-path: /clinical-notes
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+spring:
+  application:
+    name: clinical-notes-service
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/clinical_notes_db}
+    username: ${DATABASE_USERNAME:clinical_notes_user}
+    password: ${DATABASE_PASSWORD:clinical_notes_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
+    open-in-view: false
+
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1800000 # 30 minutes
+      cache-null-values: false
+
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:3}
+      timeout: 2000ms
+      jedis:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/auth/realms/hms/protocol/openid-connect/certs}
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: clinical-notes-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.hospital.hms.clinicalnotes.event
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,loggers
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+  health:
+    redis:
+      enabled: true
+    diskspace:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: true
+
+# Clinical Notes Service Specific Configuration
+clinical-notes:
+  documentation:
+    templates:
+      enabled: true
+      default-templates: SOAP,PROGRESS,DISCHARGE,ADMISSION,CONSULTATION
+      custom-templates-allowed: true
+
+    validation:
+      required-fields: [\"patientId\", \"providerId\", \"noteType\", \"content\"]
+      min-content-length: 10
+      max-content-length: 50000
+      spell-check-enabled: true
+
+    versioning:
+      enabled: true
+      max-versions: 10
+      auto-archive-days: 365
+
+    digital-signature:
+      enabled: true
+      require-signature: true
+      signature-timeout-minutes: 30
+
+  search:
+    full-text-search: true
+    index-enabled: true
+    search-suggestions: true
+
+  integration:
+    fhir:
+      enabled: true
+      version: R4
+      export-format: JSON
+    hl7:
+      enabled: true
+      version: v2.8
+
+  audit:
+    track-access: true
+    track-modifications: true
+    retention-days: 2555 # 7 years
+
+  clinical-decision-support:
+    enabled: true
+    real-time-alerts: true
+    guideline-checking: true
+
+  voice-recognition:
+    enabled: false
+    provider: ${VOICE_RECOGNITION_PROVIDER:}
+    confidence-threshold: 0.85
+
+  ai-assistance:
+    enabled: false
+    auto-suggestions: true
+    clinical-coding: true
+    quality-scoring: true
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      clinical-notes-service:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+      fhir-integration:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 30
+        wait-duration-in-open-state: 45s
+
+  retry:
+    instances:
+      clinical-notes-service:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+      search-service:
+        max-attempts: 2
+        wait-duration: 500ms
+
+  timelimiter:
+    instances:
+      clinical-notes-service:
+        timeout-duration: 10s
+      voice-recognition:
+        timeout-duration: 30s
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms.clinicalnotes: ${LOG_LEVEL:INFO}
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.springframework.data: WARN
+    org.hibernate: WARN
+    org.springframework.kafka: INFO
+    root: ${ROOT_LOG_LEVEL:INFO}
+  pattern:
+    console: \"%d{yyyy-MM-dd HH:mm:ss} - %msg%n\"
+    file: \"%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n\"
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:h2:mem:clinical_notes_dev
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+logging:
+  level:
+    com.hospital.hms.clinicalnotes: DEBUG
+    org.springframework.security: DEBUG
+
+clinical-notes:
+  documentation:
+    validation:
+      spell-check-enabled: false
+    digital-signature:
+      require-signature: false
+  ai-assistance:
+    enabled: true
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:h2:mem:clinical_notes_test
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+eureka:
+  client:
+    enabled: false
+
+clinical-notes:
+  integration:
+    fhir:
+      enabled: false
+    hl7:
+      enabled: false
+  audit:
+    track-access: false
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    com.hospital.hms.clinicalnotes: INFO
+    org.springframework.security: WARN
+    root: WARN
+
+clinical-notes:
+  documentation:
+    digital-signature:
+      require-signature: true
+  audit:
+    track-access: true
+    track-modifications: true
+  clinical-decision-support:
+    enabled: true
+    real-time-alerts: true"

@@ -1,0 +1,673 @@
+name: "\U0001F3E5\u26A1 HMS Ultimate Enterprise CI/CD Pipeline"
+true:
+  push:
+    branches:
+      - main
+      - develop
+      - staging
+      - release/*
+      - feature/*
+      - hotfix/*
+  pull_request:
+    branches:
+      - main
+      - develop
+      - staging
+  schedule:
+    - cron: 0 2 * * *
+    - cron: 0 6 * * MON
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target Environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: Skip Tests (Emergency Only)
+        required: false
+        default: false
+        type: boolean
+env:
+  NODE_VERSION: 20.x
+  JAVA_VERSION: "21"
+  PYTHON_VERSION: "3.11"
+  DOCKER_REGISTRY: ghcr.io
+  REGISTRY_USERNAME: ${{ github.actor }}
+  REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+  NEWRELIC_API_KEY: ${{ secrets.NEWRELIC_API_KEY }}
+  KUBERNETES_NAMESPACE: hms-production
+  HIPAA_COMPLIANCE_ENDPOINT: ${{ secrets.HIPAA_COMPLIANCE_ENDPOINT }}
+  FHIR_VALIDATION_ENDPOINT: ${{ secrets.FHIR_VALIDATION_ENDPOINT }}
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+  checks: write
+  deployments: write
+  issues: write
+  packages: write
+  pull-requests: write
+  statuses: write
+jobs:
+  pipeline-init:
+    name: "\U0001F680 Pipeline Initialization"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      should_deploy: ${{ steps.changes.outputs.should_deploy }}
+      environment: ${{ steps.env.outputs.environment }}
+      version: ${{ steps.version.outputs.version }}
+      changed_services: ${{ steps.changes.outputs.services }}
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: "\U0001F50D Detect Changes"
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: "frontend:\n  - 'src/**'\n  - 'apps/hms-web/**'\n  - 'components/**'\n\
+            microservices:\n  - 'microservices/**'\n  - 'apps/microservices/**'\ninfrastructure:\n\
+            \  - 'k8s/**'\n  - 'docker-compose.yml'\n  - 'Dockerfile'\nsecurity:\n \
+            \ - '.github/workflows/**'\n  - 'scripts/security/**'\nshould_deploy:\n\
+            \  - 'src/**'\n  - 'microservices/**'\n  - 'k8s/**'\n  \n"
+      - name: "\U0001F3F7\uFE0F Generate Version"
+        id: version
+        run: 'VERSION="v$(date +''%Y.%m.%d'')-${GITHUB_SHA: :8}"
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          echo "Generated version: $VERSION"
+
+          '
+      - name: "\U0001F30D Determine Environment"
+        id: env
+        run: "if [[ \"${{ github.ref }}\" == \"refs/heads/main\" ]]; then\n  echo \"\
+          environment=production\" >> $GITHUB_OUTPUT\nelif [[ \"${{ github.ref }}\"\
+          \ == \"refs/heads/staging\" ]]; then\n  echo \"environment=staging\" >> $GITHUB_OUTPUT\n\
+          else\n  echo \"environment=development\" >> $GITHUB_OUTPUT\nfi\n"
+  enterprise-code-quality:
+    name: "\U0001F50D Enterprise Code Quality Analysis"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: pipeline-init
+    strategy:
+      matrix:
+        analysis:
+          - frontend
+          - backend
+          - microservices
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: "\U0001F3D7\uFE0F Setup Multi-Language Environment"
+        uses: ./.github/actions/setup-environment
+      - name: "\U0001F4E6 Install Dependencies"
+        run: 'npm ci --include=dev
+
+          pip install -r requirements-dev.txt || echo "No Python requirements"
+
+          '
+      - name: "\U0001F9F9 ESLint Enterprise Analysis"
+        if: matrix.analysis == 'frontend'
+        run: "npm run lint: enterprise -- --format=json --output-file=eslint-report.json
+
+          npm run lint: security -- --format=sarif --output-file=eslint-security.sarif
+
+          "
+      - name: "\U0001F485 Prettier Enterprise Formatting"
+        if: matrix.analysis == 'frontend'
+        run: "npm run prettier: check:enterprise
+
+          npm run prettier: write:safe
+
+          "
+      - name: "\U0001F4CB TypeScript Ultra-Strict Check"
+        if: matrix.analysis == 'frontend'
+        run: "npm run type-check: strict
+
+          npm run type-check: coverage
+
+          "
+      - name: "\u2615 Java Code Quality (SpotBugs + PMD)"
+        if: matrix.analysis == 'backend' || matrix.analysis == 'microservices'
+        run: "cd microservices
+
+          ./mvnw spotbugs: check pmd:check
+
+          ./mvnw checkstyle: check
+
+          "
+      - name: "\U0001F512 Advanced Security Analysis"
+        run: '# Semgrep Security Analysis
+
+          python -m semgrep --config=auto --json --output=semgrep-report.json .
+
+
+          # Trivy Filesystem Scan
+
+          trivy fs --format sarif --output trivy-fs.sarif .
+
+
+          # OWASP Dependency Check
+
+          dependency-check --project "HMS" --scan . --format JSON --out dependency-check-report.json
+
+          '
+      - name: "\U0001F4CA SonarQube Ultimate Analysis"
+        uses: sonarqube-quality-gate-action@master
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+        with:
+          scanMetadataReportFile: target/sonar/report-task.txt
+      - name: "\U0001F6E1\uFE0F CodeQL Advanced Security Analysis"
+        uses: github/codeql-action/analyze@v3
+        with:
+          languages: javascript,typescript,java,python
+          queries: security-extended,security-and-quality
+          ram: 8192
+          threads: 4
+      - name: "\U0001F4C8 Upload Security Reports"
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "eslint-security.sarif
+
+            trivy-fs.sarif
+
+            "
+      - name: "\U0001F4CB Quality Gate Enforcement"
+        run: "# Enforce quality gates\npython scripts/quality/enforce-quality-gates.py\
+          \ \\\n  --eslint-report=eslint-report.json \\\n  --semgrep-report=semgrep-report.json\
+          \ \\\n  --dependency-check=dependency-check-report.json \\\n  --fail-on-high-severity\n"
+  comprehensive-testing:
+    name: "\U0001F9EA Comprehensive Testing Suite"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs:
+      - pipeline-init
+      - enterprise-code-quality
+    if: ${{ !inputs.skip_tests }}
+    strategy:
+      fail-fast: false
+      matrix:
+        test-suite:
+          - unit-frontend
+          - unit-backend
+          - integration-api
+          - integration-database
+          - e2e-critical-flows
+          - e2e-healthcare-workflows
+          - performance-load
+          - performance-stress
+          - security-penetration
+          - accessibility-compliance
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hms_test
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout
+          5s --health-retries 5
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+      - name: "\U0001F3D7\uFE0F Setup Test Environment"
+        uses: ./.github/actions/setup-test-environment
+        with:
+          test-suite: ${{ matrix.test-suite }}
+      - name: "\U0001F9EA Run Unit Tests (Frontend)"
+        if: matrix.test-suite == 'unit-frontend'
+        run: "npm run test: unit:coverage -- --ci --maxWorkers=4
+
+          npm run test: component:coverage
+
+          "
+      - name: "\u2615 Run Unit Tests (Backend/Microservices)"
+        if: matrix.test-suite == 'unit-backend'
+        run: 'cd microservices
+
+          ./mvnw test -DargLine="-Xmx2g" -Dspring.profiles.active=test
+
+          ./mvnw jacoco: report
+
+          '
+      - name: "\U0001F517 Run Integration Tests (API)"
+        if: matrix.test-suite == 'integration-api'
+        run:
+          "npm run test: api:integration\nnewman run tests/postman/HMS-API-Tests.postman_collection.json\
+          \ \\\n  --environment tests/postman/test-environment.json \\\n  --reporters\
+          \ cli,json \\\n  --reporter-json-export newman-report.json\n  \n"
+      - name: "\U0001F5C3\uFE0F Run Integration Tests (Database)"
+        if: matrix.test-suite == 'integration-database'
+        run: "npm run test: database:integration
+
+          npm run test: migration:validation
+
+          "
+      - name: "\U0001F3AD Run E2E Tests (Critical Flows)"
+        if: matrix.test-suite == 'e2e-critical-flows'
+        run: "npm run test: e2e:critical
+
+          npx playwright test --config=playwright.critical.config.ts
+
+          "
+      - name: "\U0001F3E5 Run E2E Tests (Healthcare Workflows)"
+        if: matrix.test-suite == 'e2e-healthcare-workflows'
+        run: "npx playwright test --config=playwright.healthcare.config.ts
+
+          npm run test: fhir:compliance
+
+          "
+      - name: "\u26A1 Run Performance Tests (Load)"
+        if: matrix.test-suite == 'performance-load'
+        run: "k6 run tests/performance/load-test.js \\\n  --duration=10m \\\n  --vus=50\
+          \ \\\n  --max-vus=100 \\\n  --out json=load-test-results.json\n  \n"
+      - name: "\U0001F4A5 Run Performance Tests (Stress)"
+        if: matrix.test-suite == 'performance-stress'
+        run: "k6 run tests/performance/stress-test.js \\\n  --duration=5m \\\n  --vus=100\
+          \ \\\n  --max-vus=500 \\\n  --out json=stress-test-results.json\n  \n"
+      - name: "\U0001F6E1\uFE0F Run Security Penetration Tests"
+        if: matrix.test-suite == 'security-penetration'
+        run: "# OWASP ZAP Security Testing\ndocker run -v $(pwd): /zap/wrk/:rw \\\n\
+          \  -t owasp/zap2docker-stable \\\n  zap-full-scan.py -t http: //localhost:3000\
+          \ \\\n  -J zap-report.json \\\n  -r zap-report.html\n  \n"
+      - name: "\u267F Run Accessibility Compliance Tests"
+        if: matrix.test-suite == 'accessibility-compliance'
+        run: "npm run test: accessibility:axe
+
+          npm run test: accessibility:lighthouse
+
+          "
+      - name: "\U0001F4CA Generate Test Reports"
+        if: always()
+        run: "npm run test: report:merge
+
+          npm run test: report:html
+
+          "
+      - name: "\U0001F4C8 Upload Test Results"
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.test-suite }}
+          path: "coverage/
+
+            test-results/
+
+            *.json
+
+            *.html
+
+            "
+  healthcare-compliance:
+    name: "\U0001F3E5 Healthcare Compliance Validation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - pipeline-init
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+      - name: "\U0001F3D7\uFE0F Setup Compliance Environment"
+        uses: ./.github/actions/setup-environment
+      - name: "\U0001F6E1\uFE0F HIPAA Compliance Validation"
+        run: "python scripts/compliance/hipaa-validation.py \\\n  --source-path=. \\\
+          \n  --output-format=json \\\n  --output-file=hipaa-compliance-report.json\
+          \ \\\n  --strict-mode\n  \n"
+      - name: "\U0001F4CB FHIR R4 Compliance Check"
+        run: "npm run fhir: validate:r4
+
+          npm run fhir: structure:validation
+
+          "
+      - name: "\U0001F512 PHI Data Protection Audit"
+        run: "python scripts/compliance/phi-audit.py \\\n  --scan-code \\\n  --scan-config\
+          \ \\\n  --output=phi-audit-report.json\n  \n"
+      - name: "\U0001F4CA Generate Compliance Dashboard"
+        run:
+          "python scripts/compliance/generate-dashboard.py \\\n  --hipaa-report=hipaa-compliance-report.json\
+          \ \\\n  --phi-audit=phi-audit-report.json \\\n  --output=compliance-dashboard.html\n\
+          \  \n"
+      - name: "\U0001F4C8 Upload Compliance Reports"
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-reports
+          path: "*-compliance-report.json
+
+            compliance-dashboard.html
+
+            "
+  container-security:
+    name: "\U0001F433 Container Build & Security"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - pipeline-init
+      - comprehensive-testing
+    if: ${{ needs.pipeline-init.outputs.should_deploy == 'true' }}
+    strategy:
+      matrix:
+        service:
+          - frontend
+          - api-gateway
+          - patient-management
+          - clinical-notes
+          - billing
+          - analytics-data-ingestion
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+      - name: "\U0001F3D7\uFE0F Setup Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
+      - name: "\U0001F511 Login to Container Registry"
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_TOKEN }}
+      - name: "\U0001F3F7\uFE0F Extract Container Metadata"
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ matrix.service
+            }}
+          tags: "type=ref,event=branch
+
+            type=ref,event=pr
+
+            type=sha,prefix={{branch}}-
+
+            type=raw,value=${{ needs.pipeline-init.outputs.version }}
+
+            "
+      - name: "\U0001F528 Build Container Image"
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./microservices/${{ matrix.service }}/Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+      - name: "\U0001F50D Container Security Scan (Trivy)"
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ matrix.service
+            }}:${{ needs.pipeline-init.outputs.version }}
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+      - name: "\U0001F6E1\uFE0F Container Security Scan (Snyk)"
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ env.SNYK_TOKEN }}
+        with:
+          image: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ matrix.service
+            }}:${{ needs.pipeline-init.outputs.version }}
+          args: --severity-threshold=high --file=./microservices/${{ matrix.service
+            }}/Dockerfile
+      - name: "\U0001F4CB Container Image Analysis"
+        run: "# Dive analysis for image efficiency\ndocker run --rm -v /var/run/docker.sock:\
+          \ /var/run/docker.sock \\\n  wagoodman/dive: latest \\\n  ${{ env.DOCKER_REGISTRY\
+          \ }}/${{ github.repository }}/${{ matrix.service }}: ${{ needs.pipeline-init.outputs.version\
+          \ }} \\\n  --ci \\\n  --json dive-analysis-${{ matrix.service }}.json\n  \n"
+      - name: "\U0001F4E4 Push Container Image"
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./microservices/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+      - name: "\U0001F4C8 Upload Security Scan Results"
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+  infrastructure-validation:
+    name: "\U0001F3D7\uFE0F Infrastructure Validation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - pipeline-init
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+      - name: "\U0001F527 Setup Terraform"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+      - name: "\U0001F527 Setup Kubernetes Tools"
+        run:
+          'curl -LO "https: //dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+
+          chmod +x kubectl
+
+          sudo mv kubectl /usr/local/bin/
+
+
+          # Install Helm
+
+          curl https: //raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+          | bash
+
+          '
+      - name: "\U0001F50D Terraform Validation"
+        run: "terraform fmt -check -recursive
+
+          terraform validate
+
+          "
+      - name: "\U0001F50D Kubernetes Manifest Validation"
+        run: '# Validate all Kubernetes manifests
+
+          find k8s/ -name "*.yaml" -o -name "*.yml" | xargs -I {} kubectl apply --dry-run=client
+          -f {}
+
+
+          # Security policy validation with OPA
+
+          opa test k8s/policies/ --verbose
+
+          '
+      - name: "\U0001F6E1\uFE0F Infrastructure Security Scan"
+        run: '# Checkov for Terraform security
+
+          checkov -d . --framework terraform --output sarif --output-file checkov-terraform.sarif
+
+
+          # Kubesec for Kubernetes security
+
+          find k8s/ -name "*.yaml" | xargs -I {} kubesec scan {} > kubesec-report.json
+
+          '
+  deploy-staging:
+    name: "\U0001F680 Deploy to Staging"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - pipeline-init
+      - comprehensive-testing
+      - container-security
+      - infrastructure-validation
+    if:
+      ${{ needs.pipeline-init.outputs.should_deploy == 'true' && github.ref == 'refs/heads/develop'
+      }}
+    environment: staging
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+      - name: "\U0001F527 Setup Kubernetes Access"
+        run: 'echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > kubeconfig
+
+          export KUBECONFIG=kubeconfig
+
+          '
+      - name: "\U0001F680 Deploy to Staging"
+        run: "helm upgrade --install hms-staging ./helm/hms \\\n  --namespace hms-staging\
+          \ \\\n  --create-namespace \\\n  --set image.tag=${{ needs.pipeline-init.outputs.version\
+          \ }} \\\n  --set environment=staging \\\n  --wait \\\n  --timeout=10m\n  \n"
+      - name: "\U0001F9EA Post-Deployment Validation"
+        run: "# Health checks
+
+          kubectl wait --for=condition=ready pod -l app=hms -n hms-staging --timeout=300s
+
+
+          # Smoke tests
+
+          npm run test: smoke:staging
+
+          "
+      - name: "\U0001F4CA Update Monitoring"
+        run: "# Update Grafana dashboards\ncurl -X POST \"${{ secrets.GRAFANA_API_URL\
+          \ }}/api/dashboards/db\" \\\n  -H \"Authorization: Bearer ${{ secrets.GRAFANA_API_KEY\
+          \ }}\" \\\n  -H \"Content-Type: application/json\" \\\n  -d @monitoring/grafana-dashboard.json\n"
+  deploy-production:
+    name: "\U0001F3C6 Deploy to Production"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - pipeline-init
+      - comprehensive-testing
+      - container-security
+      - infrastructure-validation
+      - healthcare-compliance
+    if: ${{ needs.pipeline-init.outputs.should_deploy == 'true' && github.ref == 'refs/heads/main'
+      }}
+    environment: production
+    steps:
+      - name: "\U0001F4E5 Checkout Repository"
+        uses: actions/checkout@v4
+      - name: "\U0001F527 Setup Production Environment"
+        run: 'echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+
+          export KUBECONFIG=kubeconfig
+
+          '
+      - name: "\U0001F680 Blue-Green Deployment"
+        run: "# Deploy to green environment\nhelm upgrade --install hms-green ./helm/hms\
+          \ \\\n  --namespace hms-production \\\n  --set image.tag=${{ needs.pipeline-init.outputs.version\
+          \ }} \\\n  --set environment=production \\\n  --set deployment.strategy=blue-green\
+          \ \\\n  --set deployment.color=green \\\n  --wait \\\n  --timeout=15m\n  \n"
+      - name: "\U0001F9EA Production Validation"
+        run: "# Comprehensive production validation
+
+          npm run test: production:validation
+
+          npm run test: fhir:production
+
+          "
+      - name: "\U0001F504 Traffic Switch"
+        run: "# Switch traffic to green deployment\nkubectl patch service hms-frontend\
+          \ -n hms-production \\\n  -p '{\"spec\": {\"selector\":{\"deployment\":\"\
+          green\"}}}'\n  \n# Wait for traffic switch\nsleep 60\n"
+      - name: "\U0001F9F9 Cleanup Blue Environment"
+        run: "# Remove blue deployment after successful switch
+
+          helm uninstall hms-blue -n hms-production || true
+
+          "
+      - name: "\U0001F4CA Update Production Monitoring"
+        run: "# Update all monitoring and alerting\ncurl -X POST \"${{ secrets.DATADOG_API_URL\
+          \ }}/api/v1/events\" \\\n  -H \"DD-API-KEY: ${{ secrets.DATADOG_API_KEY }}\"\
+          \ \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"title\":\
+          \ \"HMS Production Deployment\",\n    \"text\": \"HMS ${{ needs.pipeline-init.outputs.version\
+          \ }} successfully deployed to production\",\n    \"priority\": \"normal\"\
+          ,\n    \"tags\": [\"hms\", \"deployment\", \"production\"]\n  }'\n"
+  post-deployment-monitoring:
+    name: "\U0001F4CA Post-Deployment Monitoring"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - deploy-production
+    if: ${{ always() && contains(needs.*.result, 'success') }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: "\U0001F4CA Generate Deployment Report"
+        run: "python scripts/reporting/generate-deployment-report.py \\\n  --version=${{\
+          \ needs.pipeline-init.outputs.version }} \\\n  --environment=production \\\
+          \n  --pipeline-url=\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{\
+          \ github.run_id }}\"\n  \n"
+      - name: "\U0001F514 Notify Teams"
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: "{\n  \"text\": \"\U0001F3E5 HMS Enterprise Deployment Complete\"\
+            ,\n  \"attachments\": [\n    {\n      \"color\": \"good\",\n      \"fields\"\
+            : [\n        {\n          \"title\": \"Version\",\n          \"value\":\
+            \ \"${{ needs.pipeline-init.outputs.version }}\",\n          \"short\":\
+            \ true\n        },\n        {\n          \"title\": \"Environment\",\n \
+            \         \"value\": \"Production\",\n          \"short\": true\n      \
+            \  },\n        {\n          \"title\": \"Pipeline\",\n          \"value\"\
+            : \"<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{\
+            \ github.run_id }}|View Pipeline>\",\n          \"short\": true\n      \
+            \  }\n      ]\n    }\n  ]\n}\n"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+  cleanup:
+    name: "\U0001F9F9 Cleanup & Artifact Management"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - post-deployment-monitoring
+    if: always()
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: "\U0001F5C2\uFE0F Consolidate Artifacts"
+        run: "mkdir -p final-artifacts
+
+          # Collect all important artifacts
+
+          "
+      - name: "\U0001F4CA Generate Final Report"
+        run: "python scripts/reporting/generate-final-report.py \\\n  --pipeline-id=${{\
+          \ github.run_id }} \\\n  --output=final-artifacts/pipeline-report.html\n \
+          \ \n"
+      - name: "\U0001F4C8 Upload Final Artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: hms-enterprise-pipeline-artifacts
+          path: final-artifacts/
+          retention-days: 90
+"on":
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop

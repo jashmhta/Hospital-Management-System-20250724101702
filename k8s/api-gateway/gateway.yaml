@@ -1,0 +1,169 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: hms-gateway
+  namespace: hms
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "*.hms.local"
+      tls:
+        httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - "*.hms.local"
+      tls:
+        mode: SIMPLE
+        credentialName: hms-tls-cert
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: hms-api-gateway
+  namespace: hms
+spec:
+  hosts:
+    - "api.hms.local"
+  gateways:
+    - hms-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/patients
+      route:
+        - destination:
+            host: patient-service.hms.svc.cluster.local
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /api/billing
+      route:
+        - destination:
+            host: billing-service.hms.svc.cluster.local
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /api/pharmacy
+      route:
+        - destination:
+            host: pharmacy-service.hms.svc.cluster.local
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /api/analytics
+      route:
+        - destination:
+            host: analytics-service.hms.svc.cluster.local
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /api/auth
+      route:
+        - destination:
+            host: auth-service.hms.svc.cluster.local
+            port:
+              number: 80
+    - match:
+        - uri:
+            prefix: /graphql
+      route:
+        - destination:
+            host: graphql-federation.hms.svc.cluster.local
+            port:
+              number: 80
+---
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: hms
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  jwtRules:
+    - issuer: "https://auth.hms.local"
+      jwksUri: "https://auth.hms.local/.well-known/jwks.json"
+      audiences:
+        - "hms-api"
+      forwardOriginalToken: true
+      fromHeaders:
+        - name: Authorization
+          prefix: "Bearer "
+---
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: ratelimit-config
+  namespace: istio-system
+spec:
+  components:
+    pilot:
+      k8s:
+        env:
+          - name: PILOT_ENABLE_REDIS_RATE_LIMIT
+            value: "true"
+          - name: PILOT_RATELIMIT_URL
+            value: "redis.ratelimit.svc.cluster.local:6379"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: rate-limiting-filter
+  namespace: istio-system
+spec:
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.ratelimit
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ratelimit.v3.RateLimit
+            domain: hms-api
+            rate_limit_service:
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: rate_limit_service
+                timeout: 0.25s
+              transport_api_version: V3
+    - applyTo: CLUSTER
+      match:
+        context: GATEWAY
+      patch:
+        operation: ADD
+        value:
+          name: rate_limit_service
+          type: STRICT_DNS
+          connect_timeout: 0.25s
+          http2_protocol_options: {}
+          load_assignment:
+            cluster_name: rate_limit_service
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: ratelimit.hms.svc.cluster.local
+                          port_value: 8081

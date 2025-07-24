@@ -1,0 +1,271 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: graphql-federation-config
+  namespace: hms
+data:
+  gateway.config.json: |
+    {
+      "federation": {
+        "serviceSdl": true,
+        "serviceList": [
+          {
+            "name": "patients",
+            "url": "http://patient-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "appointments",
+            "url": "http://appointment-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "billing",
+            "url": "http://billing-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "pharmacy",
+            "url": "http://pharmacy-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "laboratory",
+            "url": "http://laboratory-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "radiology",
+            "url": "http://radiology-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "ipd",
+            "url": "http://ipd-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "opd",
+            "url": "http://opd-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "analytics",
+            "url": "http://analytics-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "cdss",
+            "url": "http://cdss-service:4000/graphql",
+            "sdl": ""
+          },
+          {
+            "name": "auth",
+            "url": "http://auth-service:4000/graphql",
+            "sdl": ""
+          }
+        ]
+      },
+      "introspection": true,
+      "playground": true,
+      "debug": false,
+      "tracing": {
+        "jaeger": {
+          "serviceName": "graphql-gateway",
+          "sampler": {
+            "type": "const",
+            "param": 1
+          },
+          "reporter": {
+            "logSpans": true,
+            "agentHost": "jaeger-agent.observability",
+            "agentPort": 6832
+          }
+        }
+      },
+      "security": {
+        "cors": {
+          "origin": "*",
+          "methods": ["GET", "POST"],
+          "allowedHeaders": ["Content-Type", "Authorization"],
+          "exposedHeaders": [],
+          "credentials": true,
+          "maxAge": 86400
+        },
+        "rateLimit": {
+          "enabled": true,
+          "max": 1000,
+          "timeWindow": "15m",
+          "keyGenerator": "ip",
+          "skipAuthenticated": false,
+          "redisOptions": {
+            "host": "redis.hms",
+            "port": 6379,
+            "keyPrefix": "graphql-rate-limit:"
+          }
+        }
+      },
+      "caching": {
+        "enabled": true,
+        "ttl": 300,
+        "redis": {
+          "host": "redis.hms",
+          "port": 6379,
+          "keyPrefix": "graphql-cache:"
+        }
+      },
+      "metrics": {
+        "enabled": true,
+        "prometheus": {
+          "path": "/metrics",
+          "port": 9090
+        }
+      },
+      "persisted_queries": {
+        "enabled": true,
+        "redis": {
+          "host": "redis.hms",
+          "port": 6379,
+          "keyPrefix": "graphql-persisted-queries:"
+        }
+      },
+      "complexity": {
+        "enabled": true,
+        "maxComplexity": 1000,
+        "scalarCost": 1,
+        "objectCost": 2,
+        "listCost": 5,
+        "listMultiplier": 10,
+        "fieldMultiplier": 1
+      },
+      "validation": {
+        "maxErrors": 10,
+        "requiredFieldValidation": true
+      },
+      "timeout": 30000,
+      "error_formatting": {
+        "mask": true,
+        "hooks": {
+          "onError": "errorTrackingFunction"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphql-federation-gateway
+  namespace: hms
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: graphql-federation-gateway
+  template:
+    metadata:
+      labels:
+        app: graphql-federation-gateway
+    spec:
+      containers:
+        - name: apollo-gateway
+          image: hms-registry.example.com/graphql-federation-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "4000"
+            - name: APOLLO_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: apollo-key
+                  key: key
+            - name: APOLLO_GRAPH_REF
+              value: hms-graph@production
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /.well-known/apollo/server-health
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /.well-known/apollo/server-health
+              port: 4000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: config-volume
+          configMap:
+            name: graphql-federation-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphql-federation
+  namespace: hms
+spec:
+  selector:
+    app: graphql-federation-gateway
+  ports:
+    - port: 80
+      targetPort: 4000
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: graphql-federation-vs
+  namespace: hms
+spec:
+  hosts:
+    - "graphql.hms.health"
+  gateways:
+    - hms-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /graphql
+      route:
+        - destination:
+            host: graphql-federation
+            port:
+              number: 80
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: graphql-federation-authz
+  namespace: hms
+spec:
+  selector:
+    matchLabels:
+      app: graphql-federation-gateway
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/hms/sa/frontend-service"]
+      to:
+        - operation:
+            methods: ["POST", "OPTIONS"]
+      when:
+        - key: request.auth.claims[iss]
+          values: ["https://auth.hms.health"]
+    - from:
+        - source:
+            namespaces: ["hms"]
+      to:
+        - operation:
+            methods: ["POST", "OPTIONS"]

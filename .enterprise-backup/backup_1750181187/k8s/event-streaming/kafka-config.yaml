@@ -1,0 +1,183 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: hms-kafka-cluster
+  namespace: hms
+spec:
+  kafka:
+    version: 3.4.0
+    replicas: 3
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+        authentication:
+          type: tls
+      - name: external
+        port: 9094
+        type: loadbalancer
+        tls: true
+        authentication:
+          type: tls
+    config:
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      inter.broker.protocol.version: "3.4"
+      auto.create.topics.enable: false
+      log.retention.hours: 168
+      log.segment.bytes: 1073741824
+      num.partitions: 10
+      delete.topic.enable: true
+    storage:
+      type: persistent-claim
+      size: 100Gi
+      deleteClaim: false
+    resources:
+      requests:
+        memory: 2Gi
+        cpu: 1
+      limits:
+        memory: 4Gi
+        cpu: 2
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: kafka-metrics
+          key: kafka-metrics-config.yaml
+    jvmOptions:
+      -Xms: 1024m
+      -Xmx: 2048m
+      gcLoggingEnabled: true
+  zookeeper:
+    replicas: 3
+    storage:
+      type: persistent-claim
+      size: 20Gi
+      deleteClaim: false
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 0.5
+      limits:
+        memory: 2Gi
+        cpu: 1
+    metricsConfig:
+      type: jmxPrometheusExporter
+      valueFrom:
+        configMapKeyRef:
+          name: zookeeper-metrics
+          key: zookeeper-metrics-config.yaml
+    jvmOptions:
+      -Xms: 512m
+      -Xmx: 1024m
+      gcLoggingEnabled: true
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: patient-events
+  namespace: hms
+  labels:
+    strimzi.io/cluster: hms-kafka-cluster
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000 # 7 days
+    segment.bytes: 1073741824 # 1GB
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: appointment-events
+  namespace: hms
+  labels:
+    strimzi.io/cluster: hms-kafka-cluster
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000 # 7 days
+    segment.bytes: 1073741824 # 1GB
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: billing-events
+  namespace: hms
+  labels:
+    strimzi.io/cluster: hms-kafka-cluster
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000 # 7 days
+    segment.bytes: 1073741824 # 1GB
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: pharmacy-events
+  namespace: hms
+  labels:
+    strimzi.io/cluster: hms-kafka-cluster
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000 # 7 days
+    segment.bytes: 1073741824 # 1GB
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: laboratory-events
+  namespace: hms
+  labels:
+    strimzi.io/cluster: hms-kafka-cluster
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 604800000 # 7 days
+    segment.bytes: 1073741824 # 1GB
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: audit-log-events
+  namespace: hms
+  labels:
+    strimzi.io/cluster: hms-kafka-cluster
+spec:
+  partitions: 24
+  replicas: 3
+  config:
+    retention.ms: 2592000000 # 30 days
+    segment.bytes: 1073741824 # 1GB
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: notification-events
+  namespace: hms
+  labels:
+    strimzi.io/cluster: hms-kafka-cluster
+spec:
+  partitions: 12
+  replicas: 3
+  config:
+    retention.ms: 259200000 # 3 days
+    segment.bytes: 1073741824 # 1GB

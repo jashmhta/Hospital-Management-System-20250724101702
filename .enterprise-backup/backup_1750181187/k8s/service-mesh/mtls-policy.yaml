@@ -1,0 +1,98 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default-mtls-policy
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: non-mtls-public-api
+  namespace: hms
+spec:
+  selector:
+    matchLabels:
+      app: public-api-gateway
+  mtls:
+    mode: PERMISSIVE
+  portLevelMtls:
+    80:
+      mode: DISABLE
+    443:
+      mode: DISABLE
+---
+apiVersion: "security.istio.io/v1beta1"
+kind: "AuthorizationPolicy"
+metadata:
+  name: "microservices-auth-policy"
+  namespace: hms
+spec:
+  selector:
+    matchLabels:
+      app: microservice
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/hms/sa/api-gateway"]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    - from:
+        - source:
+            namespaces: ["hms"]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+---
+apiVersion: "security.istio.io/v1beta1"
+kind: "AuthorizationPolicy"
+metadata:
+  name: "patient-service-auth-policy"
+  namespace: hms
+spec:
+  selector:
+    matchLabels:
+      app: patient-service
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/hms/sa/api-gateway"]
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+            paths: ["/api/patients/*"]
+    - from:
+        - source:
+            principals: ["cluster.local/ns/hms/sa/doctor-service"]
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/api/patients/*"]
+    - from:
+        - source:
+            principals: ["cluster.local/ns/hms/sa/billing-service"]
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/api/patients/*/billing-info"]
+---
+apiVersion: "security.istio.io/v1beta1"
+kind: "AuthorizationPolicy"
+metadata:
+  name: "metrics-auth-policy"
+  namespace: hms
+spec:
+  selector:
+    matchLabels:
+      app: monitoring
+  rules:
+    - from:
+        - source:
+            namespaces: ["monitoring", "observability"]
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/metrics", "/health"]

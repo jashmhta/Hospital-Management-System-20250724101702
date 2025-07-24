@@ -1,0 +1,17 @@
+node_modules
+.next
+dist
+build
+.enterprise-backup
+.quality-backup
+*.d.ts
+package-lock.json
+*.min.js
+*.map
+*.log
+.git
+coverage
+public
+.env*
+*.config.js
+*.config.ts

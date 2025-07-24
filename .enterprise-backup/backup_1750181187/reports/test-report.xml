@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="18" failures="0" errors="0" time="1.219">
+  <testsuite name="Notifications Module" errors="0" failures="0" skipped="0" timestamp="2025-06-09T19:07:53" time="0.365" tests="9">
+    <testcase classname="Notifications Module › notifyUsers" name="should create notifications for multiple users" time="0.003">
+    </testcase>
+    <testcase classname="Notifications Module › notifyUsers" name="should handle errors gracefully" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › markNotificationRead" name="should mark a notification as read" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › markNotificationRead" name="should return false if notification not found" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › markNotificationRead" name="should handle errors gracefully" time="0">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should get notifications for a user" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should filter for unread notifications when specified" time="0">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should limit the number of results when specified" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should handle errors gracefully" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="Notifications Module" errors="0" failures="0" skipped="0" timestamp="2025-06-09T19:07:53" time="0.066" tests="9">
+    <testcase classname="Notifications Module › notifyUsers" name="should create notifications for multiple users" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › notifyUsers" name="should handle errors gracefully" time="0">
+    </testcase>
+    <testcase classname="Notifications Module › markNotificationRead" name="should mark a notification as read" time="0">
+    </testcase>
+    <testcase classname="Notifications Module › markNotificationRead" name="should return false if notification not found" time="0">
+    </testcase>
+    <testcase classname="Notifications Module › markNotificationRead" name="should handle errors gracefully" time="0">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should get notifications for a user" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should filter for unread notifications when specified" time="0">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should limit the number of results when specified" time="0.001">
+    </testcase>
+    <testcase classname="Notifications Module › getUserNotifications" name="should handle errors gracefully" time="0">
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,369 @@
+# Patient Portal Backend Service Configuration
+# HMS Enterprise-Grade Configuration with HIPAA Compliance
+
+server:
+  port: 8095
+  servlet:
+    context-path: /patient-portal
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+spring:
+  application:
+    name: patient-portal-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:development}
+
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:hms_patient_portal}
+    username: ${DB_USERNAME:hms_portal_user}
+    password: ${DB_PASSWORD:secure_portal_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: PatientPortalCP
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+      auto-commit: false
+      connection-test-query: SELECT 1
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.SnakeCasePhysicalNamingStrategy
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        show_sql: false
+        jdbc:
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.ehcache.EhCacheRegionFactory
+
+  # Redis Cache Configuration
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 3 # Dedicated database for patient portal
+    timeout: 2000ms
+    jedis:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 2
+        max-wait: 1000ms
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8090/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8090/auth/realms/hms/protocol/openid-connect/certs}
+
+  # Mail Configuration
+  mail:
+    host: ${MAIL_HOST:smtp.hospital.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:noreply@hospital.com}
+    password: ${MAIL_PASSWORD:mail_password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 3000
+          writetimeout: 5000
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        max.in.flight.requests.per.connection: 5
+        enable.idempotence: true
+    consumer:
+      group-id: patient-portal-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "com.hms.patientportal.dto,com.hms.shared.dto"
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+  instance:
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      management.context-path: /actuator
+      version: "1.0.0"
+      service-type: "patient-portal"
+
+# Management Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    com.hms.patientportal: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.springframework.web: WARN
+    root: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId},%X{spanId}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId},%X{spanId}] %logger{36} - %msg%n"
+  file:
+    name: /var/logs/hms/patient-portal-backend.log
+    max-size: 100MB
+    max-history: 30
+
+# Patient Portal Specific Configuration
+patient-portal:
+  security:
+    # Password Policy
+    password:
+      min-length: 8
+      max-length: 128
+      require-uppercase: true
+      require-lowercase: true
+      require-numbers: true
+      require-special-chars: true
+      expiry-days: 90
+      history-check: 5
+
+    # Account Security
+    account:
+      max-failed-attempts: 5
+      lockout-duration-hours: 24
+      session-timeout-minutes: 30
+      concurrent-sessions: 3
+
+    # Token Configuration
+    tokens:
+      activation-expiry-hours: 48
+      password-reset-expiry-hours: 2
+      jwt-expiry-hours: 1
+      refresh-token-expiry-days: 30
+
+    # Two-Factor Authentication
+    two-factor:
+      enabled: true
+      sms-provider: ${SMS_PROVIDER:twilio}
+      email-backup: true
+      recovery-codes: 10
+
+  # Features Configuration
+  features:
+    # Family Member Management
+    family-members:
+      max-members: 10
+      auto-verification: false
+      consent-expiry-years: 2
+      minor-access-restrictions: true
+
+    # Messaging
+    messaging:
+      max-attachments: 5
+      max-attachment-size-mb: 10
+      encryption-enabled: true
+      retention-days: 365
+      auto-archive-days: 90
+
+    # Appointment Requests
+    appointments:
+      max-pending-requests: 5
+      advance-booking-days: 90
+      auto-priority-keywords:
+        - "urgent"
+        - "emergency"
+        - "severe"
+        - "critical"
+        - "chest pain"
+        - "difficulty breathing"
+
+    # Medical Records Access
+    medical-records:
+      access-levels:
+        - "PATIENT"
+        - "FAMILY_LIMITED"
+        - "FAMILY_FULL"
+        - "GUARDIAN"
+      hipaa-logging: true
+      audit-trail: true
+
+  # Integration Configuration
+  integration:
+    # EMR System
+    emr:
+      base-url: ${EMR_BASE_URL:http://localhost:8080/emr}
+      api-key: ${EMR_API_KEY:emr_api_key}
+      timeout: 30s
+      retry-attempts: 3
+
+    # Appointment System
+    appointment-service:
+      base-url: ${APPOINTMENT_SERVICE_URL:http://localhost:8085/appointments}
+      timeout: 15s
+      circuit-breaker:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 10s
+
+    # Notification Service
+    notification-service:
+      base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8096/notifications}
+      email-templates:
+        activation: "patient-activation"
+        welcome: "patient-welcome"
+        password-reset: "password-reset"
+        appointment-confirmation: "appointment-confirmed"
+        message-notification: "new-message"
+
+  # Performance Configuration
+  performance:
+    # Caching
+    cache:
+      user-profiles:
+        ttl: 1800 # 30 minutes
+        max-entries: 10000
+      medical-records:
+        ttl: 900 # 15 minutes
+        max-entries: 5000
+      dashboard-data:
+        ttl: 300 # 5 minutes
+        max-entries: 1000
+
+    # Rate Limiting
+    rate-limiting:
+      enabled: true
+      requests-per-minute: 60
+      requests-per-hour: 1000
+      burst-capacity: 20
+
+    # Async Processing
+    async:
+      core-pool-size: 5
+      max-pool-size: 20
+      queue-capacity: 100
+      thread-name-prefix: "PatientPortal-"
+
+  # Compliance Configuration
+  compliance:
+    # HIPAA Settings
+    hipaa:
+      audit-logging: true
+      data-encryption: true
+      access-logging: true
+      minimum-necessary: true
+      breach-notification: true
+
+    # GDPR Settings
+    gdpr:
+      data-portability: true
+      right-to-erasure: true
+      consent-management: true
+      data-retention-days: 2555 # 7 years
+
+# Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      appointment-service:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 10s
+        permitted-number-of-calls-in-half-open-state: 5
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state: 30s
+      emr-service:
+        failure-rate-threshold: 60
+        slow-call-duration-threshold: 15s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 60s
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: development
+
+  datasource:
+    url: jdbc:h2:mem:patient_portal_dev
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+logging:
+  level:
+    com.hms.patientportal: DEBUG
+    org.springframework.security: DEBUG
+
+patient-portal:
+  security:
+    account:
+      max-failed-attempts: 10 # More lenient for dev
+  features:
+    messaging:
+      encryption-enabled: false # Simplified for dev

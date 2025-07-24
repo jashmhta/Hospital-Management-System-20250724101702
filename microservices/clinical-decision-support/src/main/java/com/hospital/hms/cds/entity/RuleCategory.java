@@ -1,0 +1,30 @@
+package com.hospital.hms.cds.entity;
+
+/**
+ * Rule Category enumeration for different types of clinical decision support rules
+ * 
+ * @author HMS Enterprise Team
+ * @version 1.0.0
+ */
+public enum RuleCategory {
+    DRUG_INTERACTION,
+    ALLERGY_ALERT,
+    DOSAGE_CHECK,
+    CONTRAINDICATION,
+    DIAGNOSIS_SUPPORT,
+    TREATMENT_RECOMMENDATION,
+    PREVENTION_REMINDER,
+    QUALITY_MEASURE,
+    GUIDELINE_COMPLIANCE,
+    RISK_ASSESSMENT,
+    LAB_INTERPRETATION,
+    VITAL_SIGNS_ALERT,
+    MEDICATION_RECONCILIATION,
+    DISCHARGE_PLANNING,
+    INFECTION_CONTROL,
+    SAFETY_CHECK,
+    COST_EFFECTIVENESS,
+    WORKFLOW_OPTIMIZATION,
+    CLINICAL_PATHWAY,
+    EMERGENCY_PROTOCOL
+}

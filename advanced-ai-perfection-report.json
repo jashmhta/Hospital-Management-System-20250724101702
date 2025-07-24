@@ -1,0 +1,127 @@
+{
+  "success": false,
+  "total_duration": 127.50204801559448,
+  "iterations": [
+    {
+      "iteration": 1,
+      "fix_results": {
+        "total_fixes": 2300,
+        "processed_files": 571,
+        "batches_processed": 39
+      },
+      "validation_results": {
+        "typescript": {
+          "success": false,
+          "errors": 0,
+          "strategy": "npx tsc --noEmit --skipLibCheck"
+        },
+        "eslint": {
+          "success": false,
+          "errors": 0,
+          "warnings": 3
+        },
+        "prettier": {
+          "success": false,
+          "errors": 4233,
+          "formatted_files": 0
+        },
+        "build": {
+          "success": false,
+          "errors": 13,
+          "build_artifacts": true
+        },
+        "security": {
+          "success": false,
+          "errors": 9,
+          "vulnerabilities": 9
+        },
+        "overall": {
+          "total_errors": 4255,
+          "tools_passing": 0,
+          "total_tools": 4,
+          "perfection_achieved": false
+        }
+      },
+      "perfection_achieved": false,
+      "total_errors": 4255,
+      "duration": 63.9019250869751
+    },
+    {
+      "iteration": 2,
+      "fix_results": {
+        "total_fixes": 776,
+        "processed_files": 571,
+        "batches_processed": 39
+      },
+      "validation_results": {
+        "typescript": {
+          "success": false,
+          "errors": 0,
+          "strategy": "npx tsc --noEmit --skipLibCheck"
+        },
+        "eslint": {
+          "success": false,
+          "errors": 0,
+          "warnings": 3
+        },
+        "prettier": {
+          "success": false,
+          "errors": 4233,
+          "formatted_files": 0
+        },
+        "build": {
+          "success": false,
+          "errors": 29,
+          "build_artifacts": true
+        },
+        "security": {
+          "success": false,
+          "errors": 9,
+          "vulnerabilities": 9
+        },
+        "overall": {
+          "total_errors": 4271,
+          "tools_passing": 0,
+          "total_tools": 4,
+          "perfection_achieved": false
+        }
+      },
+      "perfection_achieved": false,
+      "total_errors": 4271,
+      "duration": 63.56896638870239
+    }
+  ],
+  "final_validation": {
+    "typescript": {
+      "success": false,
+      "errors": 0,
+      "strategy": "npx tsc --noEmit --skipLibCheck"
+    },
+    "eslint": {
+      "success": false,
+      "errors": 0,
+      "warnings": 3
+    },
+    "prettier": {
+      "success": false,
+      "errors": 4233,
+      "formatted_files": 0
+    },
+    "build": {
+      "success": false,
+      "errors": 29,
+      "build_artifacts": true
+    },
+    "security": {
+      "success": false,
+      "errors": 9,
+      "vulnerabilities": 9
+    },
+    "overall": {
+      "total_errors": 4271,
+      "tools_passing": 0,
+      "total_tools": 4,
+      "perfection_achieved": false
+    }
+  }
+}

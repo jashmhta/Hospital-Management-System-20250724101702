@@ -1,0 +1,227 @@
+# HMS Enterprise Dependabot Configuration
+# Automated dependency management with healthcare compliance requirements
+
+version: 2
+
+updates:
+  # Frontend Dependencies (Node.js/npm)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "02:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "hms-security-team"
+      - "hms-compliance-team"
+    assignees:
+      - "hms-devops-lead"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "security"
+      - "auto-merge-candidate"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      # Ignore major version updates for critical dependencies
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Group testing dependencies
+      testing-dependencies:
+        patterns:
+          - "jest*"
+          - "@testing-library/*"
+          - "playwright*"
+          - "cypress*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group ESLint and Prettier
+      code-quality:
+        patterns:
+          - "eslint*"
+          - "@eslint/*"
+          - "prettier*"
+          - "@typescript-eslint/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group UI dependencies
+      ui-dependencies:
+        patterns:
+          - "@radix-ui/*"
+          - "tailwindcss*"
+          - "lucide-react"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Microservices Dependencies (Java/Maven)
+  - package-ecosystem: "maven"
+    directory: "/microservices/patient-management"
+    schedule:
+      interval: "daily"
+      time: "03:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "hms-security-team"
+      - "hms-backend-team"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "java"
+      - "microservices"
+      - "security"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      # Ignore major Spring Boot updates (require manual testing)
+      - dependency-name: "org.springframework.boot:spring-boot-starter-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.springframework:spring-*"
+        update-types: ["version-update:semver-major"]
+
+  # Additional microservices
+  - package-ecosystem: "maven"
+    directory: "/microservices/appointment-scheduling"
+    schedule:
+      interval: "daily"
+      time: "03:15"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "hms-security-team"
+      - "hms-backend-team"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "java"
+      - "microservices"
+
+  - package-ecosystem: "maven"
+    directory: "/microservices/billing"
+    schedule:
+      interval: "daily"
+      time: "03:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "hms-security-team"
+      - "hms-backend-team"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "java"
+      - "microservices"
+
+  - package-ecosystem: "maven"
+    directory: "/microservices/clinical-notes"
+    schedule:
+      interval: "daily"
+      time: "03:45"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "hms-security-team"
+      - "hms-backend-team"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "java"
+      - "microservices"
+
+  # Docker Dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "02:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "hms-security-team"
+      - "hms-devops-team"
+    commit-message:
+      prefix: "chore(docker)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "infrastructure"
+      - "security"
+
+  # Microservices Docker files
+  - package-ecosystem: "docker"
+    directory: "/microservices"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "02:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "hms-security-team"
+      - "hms-devops-team"
+    commit-message:
+      prefix: "chore(docker)"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "microservices"
+
+  # GitHub Actions Dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "02:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "hms-security-team"
+      - "hms-devops-team"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "ci-cd"
+      - "security"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+# Healthcare Compliance Notes:
+# 1. All dependency updates trigger security scans
+# 2. Critical healthcare dependencies require manual approval
+# 3. Updates are scheduled during low-traffic hours
+# 4. Security patches are prioritized with daily checks
+# 5. Compliance team review required for all updates

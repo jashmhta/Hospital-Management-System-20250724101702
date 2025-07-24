@@ -1,0 +1,350 @@
+# PACS Integration Service Configuration
+server:
+  port: 8091
+  servlet:
+    context-path: /pacs-integration
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+spring:
+  application:
+    name: pacs-integration-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hms_pacs}
+    username: ${DATABASE_USERNAME:hms_user}
+    password: ${DATABASE_PASSWORD:hms_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 30000
+      pool-name: PacsIntegrationHikariCP
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.SnakeCasePhysicalNamingStrategy
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+    show-sql: ${JPA_SHOW_SQL:false}
+
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000 # 1 hour
+      cache-null-values: false
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+    consumer:
+      group-id: pacs-integration-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.hospital.hms.pacs.dto"
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/auth/realms/hms/protocol/openid-connect/certs}
+
+  # File Upload Configuration
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+      file-size-threshold: 2KB
+
+# Service Discovery
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: 1.0.0
+      description: "PACS Integration Service for medical imaging"
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms.pacs: ${LOG_LEVEL:INFO}
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_PARAM_LOG_LEVEL:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%logger{36}] - %msg%n"
+  file:
+    name: ${LOG_FILE_NAME:logs/pacs-integration-service.log}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,configprops,loggers
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    config-url: /api-docs/swagger-config
+    urls-primary-name: pacs-integration-service
+    display-request-duration: true
+    groups-order: DESC
+    operations-sorter: method
+    disable-swagger-default-url: true
+  group-configs:
+    - group: pacs-integration-api
+      display-name: "PACS Integration API"
+      paths-to-match: /api/v1/pacs/**
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      dicom-storage:
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+        sliding-window-type: count_based
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        record-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+      fhir-service:
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 3
+        sliding-window-type: count_based
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 15s
+        failure-rate-threshold: 60
+  retry:
+    instances:
+      dicom-processing:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+      image-analysis:
+        max-attempts: 2
+        wait-duration: 2s
+  timeout:
+    instances:
+      dicom-upload:
+        timeout-duration: 30s
+      image-processing:
+        timeout-duration: 60s
+
+# Custom PACS Configuration
+pacs:
+  storage:
+    base-path: ${PACS_STORAGE_PATH:/var/pacs/storage}
+    cache-path: ${PACS_CACHE_PATH:/var/pacs/cache}
+    backup-path: ${PACS_BACKUP_PATH:/var/pacs/backup}
+    max-file-size: 100MB
+    compression:
+      enabled: true
+      quality: 95
+    encryption:
+      enabled: ${PACS_ENCRYPTION_ENABLED:true}
+      algorithm: AES-256-GCM
+
+  dicom:
+    validation:
+      strict-mode: ${PACS_STRICT_VALIDATION:false}
+      check-transfer-syntax: true
+      validate-pixel-data: true
+    processing:
+      parallel-processing: true
+      max-threads: ${PACS_PROCESSING_THREADS:4}
+      timeout: 30s
+    anonymization:
+      enabled: ${PACS_ANONYMIZATION_ENABLED:false}
+      keep-patient-id: false
+      keep-study-date: true
+
+  imaging:
+    quality-assessment:
+      enabled: true
+      ai-model: quality-assessment-v1
+      threshold: 80.0
+    thumbnail:
+      enabled: true
+      max-size: 256x256
+      format: JPEG
+      quality: 85
+
+  integration:
+    fhir:
+      enabled: ${PACS_FHIR_ENABLED:true}
+      base-url: ${FHIR_BASE_URL:http://localhost:8080/fhir}
+      auto-create-resources: true
+    ris:
+      enabled: ${PACS_RIS_ENABLED:false}
+      endpoint: ${RIS_ENDPOINT:http://localhost:8092/ris}
+    worklist:
+      enabled: ${PACS_WORKLIST_ENABLED:true}
+      auto-import: true
+      schedule: "0 */5 * * * *" # Every 5 minutes
+
+  archival:
+    enabled: ${PACS_ARCHIVAL_ENABLED:true}
+    retention-days: ${PACS_RETENTION_DAYS:2555} # 7 years
+    auto-archive-days: ${PACS_AUTO_ARCHIVE_DAYS:90}
+    schedule: "0 0 2 * * *" # Daily at 2 AM
+
+  monitoring:
+    metrics:
+      enabled: true
+      detailed: true
+    alerts:
+      enabled: true
+      email: ${PACS_ALERT_EMAIL:admin@hospital.com}
+      disk-usage-threshold: 85
+      error-rate-threshold: 5
+
+# External Service URLs
+external-services:
+  patient-management:
+    url: ${PATIENT_MANAGEMENT_URL:http://localhost:8081/patient-management}
+  appointment-scheduling:
+    url: ${APPOINTMENT_SCHEDULING_URL:http://localhost:8082/appointment-scheduling}
+  billing:
+    url: ${BILLING_URL:http://localhost:8083/billing}
+  clinical-notes:
+    url: ${CLINICAL_NOTES_URL:http://localhost:8084/clinical-notes}
+
+# Development Profile Overrides
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  h2:
+    console:
+      enabled: true
+
+pacs:
+  storage:
+    base-path: ./dev-storage/pacs
+  dicom:
+    validation:
+      strict-mode: false
+
+logging:
+  level:
+    com.hospital.hms.pacs: DEBUG
+    org.hibernate.SQL: DEBUG
+
+# Production Profile Overrides
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+pacs:
+  dicom:
+    validation:
+      strict-mode: true
+  archival:
+    enabled: true
+  monitoring:
+    alerts:
+      enabled: true
+
+logging:
+  level:
+    com.hospital.hms.pacs: WARN
+    org.hibernate.SQL: WARN

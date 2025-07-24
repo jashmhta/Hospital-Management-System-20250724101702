@@ -1,0 +1,316 @@
+# MPI Integration Service Configuration
+spring:
+  application:
+    name: mpi-integration-service
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hms_mpi}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  # Redis Configuration for Caching
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 2000ms
+    jedis:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000 # 10 minutes
+      cache-null-values: false
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8081/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8081/auth/realms/hms/protocol/openid-connect/certs}
+
+  # Eureka Configuration
+  cloud:
+    discovery:
+      enabled: ${DISCOVERY_ENABLED:true}
+
+  # Kafka Configuration for Event Streaming
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: mpi-integration-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8084}
+  servlet:
+    context-path: /mpi-integration
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 10
+
+# Eureka Client Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    register-with-eureka: ${EUREKA_REGISTER:true}
+    fetch-registry: ${EUREKA_FETCH_REGISTRY:true}
+  instance:
+    prefer-ip-address: true
+    hostname: ${HOSTNAME:localhost}
+    instance-id: ${spring.application.name}:${server.port}
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers,env,beans
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms.mpiintegration: ${LOG_LEVEL:INFO}
+    org.springframework.security: WARN
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:logs/mpi-integration-service.log}
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: true
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      patientIdentityService:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        record-exceptions:
+          - java.lang.Exception
+  retry:
+    instances:
+      patientIdentityService:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - java.lang.Exception
+  timelimiter:
+    instances:
+      patientIdentityService:
+        timeout-duration: 5s
+
+# Custom Application Properties
+app:
+  mpi:
+    # MPI ID Generation Configuration
+    id-prefix: ${MPI_ID_PREFIX:MPI}
+    id-length: ${MPI_ID_LENGTH:20}
+
+    # Identity Matching Configuration
+    matching:
+      confidence-threshold: ${MATCHING_CONFIDENCE_THRESHOLD:85.0}
+      auto-merge-threshold: ${AUTO_MERGE_THRESHOLD:95.0}
+      fuzzy-match-enabled: ${FUZZY_MATCH_ENABLED:true}
+      phonetic-match-enabled: ${PHONETIC_MATCH_ENABLED:true}
+
+    # Data Quality Configuration
+    data-quality:
+      minimum-score: ${DATA_QUALITY_MIN_SCORE:70.0}
+      completeness-threshold: ${COMPLETENESS_THRESHOLD:60.0}
+      accuracy-validation-enabled: ${ACCURACY_VALIDATION_ENABLED:true}
+
+    # FHIR Integration Configuration
+    fhir:
+      server-url: ${FHIR_SERVER_URL:http://localhost:8080/fhir}
+      sync-enabled: ${FHIR_SYNC_ENABLED:true}
+      sync-interval: ${FHIR_SYNC_INTERVAL:3600} # seconds
+      client-id: ${FHIR_CLIENT_ID:mpi-integration}
+      client-secret: ${FHIR_CLIENT_SECRET:}
+
+    # Security Configuration
+    security:
+      encryption:
+        enabled: ${ENCRYPTION_ENABLED:true}
+        algorithm: ${ENCRYPTION_ALGORITHM:AES}
+        key: ${ENCRYPTION_KEY:}
+
+      audit:
+        enabled: ${AUDIT_ENABLED:true}
+        retention-days: ${AUDIT_RETENTION_DAYS:2555} # 7 years
+
+    # External System Integration
+    external-systems:
+      timeout: ${EXTERNAL_SYSTEM_TIMEOUT:30s}
+      retry-attempts: ${EXTERNAL_SYSTEM_RETRY:3}
+      batch-size: ${EXTERNAL_SYSTEM_BATCH_SIZE:100}
+
+# Feature Flags
+features:
+  identity-matching:
+    enabled: ${FEATURE_IDENTITY_MATCHING:true}
+  auto-verification:
+    enabled: ${FEATURE_AUTO_VERIFICATION:true}
+  fhir-integration:
+    enabled: ${FEATURE_FHIR_INTEGRATION:true}
+  real-time-sync:
+    enabled: ${FEATURE_REAL_TIME_SYNC:false}
+  machine-learning-matching:
+    enabled: ${FEATURE_ML_MATCHING:false}
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+
+  h2:
+    console:
+      enabled: true
+
+logging:
+  level:
+    com.hospital.hms.mpiintegration: DEBUG
+    org.hibernate.SQL: DEBUG
+
+app:
+  mpi:
+    security:
+      encryption:
+        enabled: false
+      audit:
+        enabled: false
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+eureka:
+  client:
+    enabled: false
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+logging:
+  level:
+    com.hospital.hms.mpiintegration: WARN
+    org.hibernate.SQL: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+app:
+  mpi:
+    security:
+      encryption:
+        enabled: true
+      audit:
+        enabled: true
+        retention-days: 2555

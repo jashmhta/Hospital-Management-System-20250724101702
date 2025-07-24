@@ -1,0 +1,109 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: istio-control-plane
+  namespace: istio-system
+spec:
+  profile: default
+  components:
+    base:
+      enabled: true
+    pilot:
+      enabled: true
+      k8s:
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            cpu: 1000m
+            memory: 4Gi
+        hpaSpec:
+          minReplicas: 2
+          maxReplicas: 5
+          metrics:
+            - type: Resource
+              resource:
+                name: cpu
+                targetAverageUtilization: 80
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        k8s:
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          hpaSpec:
+            minReplicas: 2
+            maxReplicas: 5
+    egressGateways:
+      - name: istio-egressgateway
+        enabled: true
+        k8s:
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+  meshConfig:
+    accessLogFile: /dev/stdout
+    enableTracing: true
+    defaultConfig:
+      tracing:
+        sampling: 100
+        zipkin:
+          address: jaeger-collector.observability.svc:9411
+      concurrency: 2
+    enableAutoMtls: true
+    defaultDestinationRuleExportTo: ["*"]
+    defaultVirtualServiceExportTo: ["*"]
+    defaultServiceExportTo: ["*"]
+    trustDomain: "hms.local"
+    trustDomainAliases: ["hms.local", "cluster.local"]
+    outboundTrafficPolicy:
+      mode: ALLOW_ANY
+    enableEnvoyAccessLogService: true
+  values:
+    global:
+      proxy:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+        concurrency: 2
+        logLevel: info
+      proxy_init:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 10Mi
+          limits:
+            cpu: 100m
+            memory: 50Mi
+      logging:
+        level: "default:info"
+      imagePullPolicy: IfNotPresent
+    pilot:
+      autoscaleEnabled: true
+      autoscaleMin: 2
+      autoscaleMax: 5
+      traceSampling: 100
+    gateways:
+      istio-ingressgateway:
+        autoscaleEnabled: true
+        autoscaleMin: 2
+        autoscaleMax: 5
+        type: LoadBalancer
+        serviceAnnotations:
+          service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    sidecarInjectorWebhook:
+      rewriteAppHTTPProbe: true

@@ -1,0 +1,635 @@
+// Appointment Scheduling Schema
+// This schema defines the comprehensive appointment scheduling system
+
+// ScheduleTemplate - Templates for recurring schedules
+model ScheduleTemplate {
+  id                   String                @id @default(uuid())
+  providerId           String
+  name                 String
+  description          String?
+  isActive             Boolean               @default(true)
+  effectiveDate        DateTime
+  expirationDate       DateTime?
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  scheduleSlots        ScheduleTemplateSlot[]
+  
+  @@index([providerId])
+  @@index([isActive])
+}
+
+// ScheduleTemplateSlot - Time slots within a schedule template
+model ScheduleTemplateSlot {
+  id                   String                @id @default(uuid())
+  templateId           String
+  template             ScheduleTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  dayOfWeek            Int                   // 0=Sunday, 1=Monday, etc.
+  startTime            String                // HH:MM format
+  endTime              String                // HH:MM format
+  slotDuration         Int                   // Duration in minutes
+  slotType             String                // Regular, Block, Admin, etc.
+  locationId           String?
+  departmentId         String?
+  maxAppointments      Int                   @default(1)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([templateId])
+  @@index([dayOfWeek])
+  @@index([slotType])
+}
+
+// Provider - Healthcare provider
+model Provider {
+  id                   String                @id @default(uuid())
+  providerId           String                @unique // Provider identifier
+  firstName            String
+  lastName             String
+  middleName           String?
+  credentials          String?
+  providerType         String                // Physician, Nurse, Therapist, etc.
+  specialties          String[]
+  npi                  String?               // National Provider Identifier
+  status               String                @default("Active") // Active, Inactive, On Leave
+  email                String?
+  phone                String?
+  maxPatients          Int?                  // Max patients per day
+  averageSlotDuration  Int?                  // Average appointment duration in minutes
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  schedules            ProviderSchedule[]
+  workingHours         ProviderWorkingHours[]
+  unavailabilities     ProviderUnavailability[]
+  appointments         Appointment[]
+  
+  @@index([providerId])
+  @@index([lastName, firstName])
+  @@index([providerType])
+  @@index([status])
+}
+
+// ProviderWorkingHours - Provider's standard working hours
+model ProviderWorkingHours {
+  id                   String                @id @default(uuid())
+  providerId           String
+  provider             Provider              @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  dayOfWeek            Int                   // 0=Sunday, 1=Monday, etc.
+  startTime            String                // HH:MM format
+  endTime              String                // HH:MM format
+  isAvailable          Boolean               @default(true)
+  locationId           String?
+  effectiveDate        DateTime              @default(now())
+  expirationDate       DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([providerId])
+  @@index([dayOfWeek])
+  @@index([isAvailable])
+}
+
+// ProviderUnavailability - Provider's time off, vacations, etc.
+model ProviderUnavailability {
+  id                   String                @id @default(uuid())
+  providerId           String
+  provider             Provider              @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  startDateTime        DateTime
+  endDateTime          DateTime
+  unavailabilityType   String                // Vacation, Sick, CME, Personal, Meeting, etc.
+  reason               String?
+  isRecurring          Boolean               @default(false)
+  recurrencePattern    String?               // JSON structure for recurrence if applicable
+  status               String                @default("Approved") // Pending, Approved, Denied
+  approvedBy           String?
+  approvedDate         DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([providerId])
+  @@index([startDateTime])
+  @@index([endDateTime])
+  @@index([unavailabilityType])
+  @@index([status])
+}
+
+// ProviderSchedule - Provider's actual schedule
+model ProviderSchedule {
+  id                   String                @id @default(uuid())
+  providerId           String
+  provider             Provider              @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  scheduleDate         DateTime              // Date of this schedule
+  startTime            String                // HH:MM format
+  endTime              String                // HH:MM format
+  status               String                @default("Available") // Available, Unavailable, Full
+  locationId           String?
+  departmentId         String?
+  maxAppointments      Int?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  slots                ScheduleSlot[]
+  
+  @@index([providerId])
+  @@index([scheduleDate])
+  @@index([status])
+}
+
+// ScheduleSlot - Individual appointment slots
+model ScheduleSlot {
+  id                   String                @id @default(uuid())
+  scheduleId           String
+  schedule             ProviderSchedule      @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  slotDateTime         DateTime              // Date and time of slot
+  duration             Int                   // Duration in minutes
+  slotType             String                // Regular, Block, Admin, etc.
+  status               String                @default("Available") // Available, Booked, Blocked, Hold
+  appointmentId        String?               // ID of appointment if booked
+  maxAppointments      Int                   @default(1)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([scheduleId])
+  @@index([slotDateTime])
+  @@index([slotType])
+  @@index([status])
+}
+
+// Location - Physical locations for appointments
+model Location {
+  id                   String                @id @default(uuid())
+  locationId           String                @unique
+  name                 String
+  description          String?
+  locationType         String                // Clinic, Hospital, Office, Telehealth, etc.
+  address              String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  country              String?
+  phone                String?
+  email                String?
+  status               String                @default("Active") // Active, Inactive, Closed
+  timezone             String                @default("America/New_York")
+  opensAt              String?               // HH:MM format
+  closesAt             String?               // HH:MM format
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  rooms                Room[]
+  appointments         Appointment[]
+  
+  @@index([locationId])
+  @@index([locationType])
+  @@index([status])
+}
+
+// Room - Rooms within locations
+model Room {
+  id                   String                @id @default(uuid())
+  roomId               String                @unique
+  locationId           String
+  location             Location              @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  name                 String
+  description          String?
+  roomType             String                // Exam, Procedure, Lab, Office, etc.
+  capacity             Int                   @default(1)
+  features             String[]              // Features/equipment in the room
+  status               String                @default("Active") // Active, Inactive, Maintenance
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  appointments         Appointment[]
+  equipment            RoomEquipment[]
+  
+  @@index([roomId])
+  @@index([locationId])
+  @@index([roomType])
+  @@index([status])
+}
+
+// RoomEquipment - Equipment assigned to rooms
+model RoomEquipment {
+  id                   String                @id @default(uuid())
+  roomId               String
+  room                 Room                  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  equipmentId          String
+  equipmentName        String
+  equipmentType        String
+  isPortable           Boolean               @default(false)
+  status               String                @default("Available") // Available, In Use, Maintenance
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([roomId])
+  @@index([equipmentId])
+  @@index([equipmentType])
+  @@index([status])
+}
+
+// Department - Hospital/clinic departments
+model Department {
+  id                   String                @id @default(uuid())
+  departmentId         String                @unique
+  name                 String
+  description          String?
+  departmentType       String                // Cardiology, Orthopedics, Radiology, etc.
+  status               String                @default("Active") // Active, Inactive
+  contactPerson        String?
+  contactPhone         String?
+  contactEmail         String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  appointmentTypes     AppointmentType[]
+  appointments         Appointment[]
+  
+  @@index([departmentId])
+  @@index([departmentType])
+  @@index([status])
+}
+
+// AppointmentType - Types of appointments
+model AppointmentType {
+  id                   String                @id @default(uuid())
+  typeId               String                @unique
+  name                 String
+  description          String?
+  departmentId         String?
+  department           Department?           @relation(fields: [departmentId], references: [id])
+  defaultDuration      Int                   // Duration in minutes
+  color                String?               // For calendar display
+  prepTime             Int                   @default(0) // Prep time in minutes
+  postTime             Int                   @default(0) // Post-appointment time in minutes
+  requiresApproval     Boolean               @default(false)
+  allowsOverlap        Boolean               @default(false)
+  isActive             Boolean               @default(true)
+  price                Decimal?              @db.Decimal(10, 2)
+  instructions         String?               // Pre-appointment instructions
+  resourceRequirements String?               // Required resources
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  appointments         Appointment[]
+  
+  @@index([typeId])
+  @@index([departmentId])
+  @@index([isActive])
+}
+
+// Appointment - Patient appointments
+model Appointment {
+  id                   String                @id @default(uuid())
+  appointmentId        String                @unique
+  patientId            String
+  providerId           String
+  provider             Provider              @relation(fields: [providerId], references: [id])
+  appointmentTypeId    String
+  appointmentType      AppointmentType       @relation(fields: [appointmentTypeId], references: [id])
+  locationId           String?
+  location             Location?             @relation(fields: [locationId], references: [id])
+  roomId               String?
+  room                 Room?                 @relation(fields: [roomId], references: [id])
+  departmentId         String?
+  department           Department?           @relation(fields: [departmentId], references: [id])
+  startDateTime        DateTime
+  endDateTime          DateTime
+  duration             Int                   // Duration in minutes
+  status               String                // Scheduled, Confirmed, Checked In, Completed, Cancelled, No Show
+  title                String?
+  description          String?
+  reasonForVisit       String?
+  patientInstructions  String?
+  bookingSource        String                // Web, Phone, Walk-in, Referred, Portal
+  recurringId          String?               // ID to link recurring appointments
+  parentAppointmentId  String?               // Parent appointment if this is a follow-up
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  reminders            AppointmentReminder[]
+  notes                AppointmentNote[]
+  attachments          AppointmentAttachment[]
+  checkin              AppointmentCheckin?
+  waitlistEntries      WaitlistEntry[]
+  cancellation         AppointmentCancellation?
+  feedback             AppointmentFeedback?
+  
+  @@index([appointmentId])
+  @@index([patientId])
+  @@index([providerId])
+  @@index([appointmentTypeId])
+  @@index([locationId])
+  @@index([startDateTime])
+  @@index([status])
+  @@index([recurringId])
+}
+
+// AppointmentReminder - Reminders for appointments
+model AppointmentReminder {
+  id                   String                @id @default(uuid())
+  appointmentId        String
+  appointment          Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  reminderType         String                // SMS, Email, Phone, Push Notification
+  reminderStatus       String                // Pending, Sent, Failed, Canceled
+  scheduledDateTime    DateTime
+  sentDateTime         DateTime?
+  recipientContact     String
+  message              String
+  responseReceived     Boolean               @default(false)
+  responseDateTime     DateTime?
+  responseContent      String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([appointmentId])
+  @@index([reminderType])
+  @@index([reminderStatus])
+  @@index([scheduledDateTime])
+}
+
+// AppointmentNote - Notes related to appointments
+model AppointmentNote {
+  id                   String                @id @default(uuid())
+  appointmentId        String
+  appointment          Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  noteType             String                // Administrative, Clinical, Follow-up, etc.
+  content              String
+  authorId             String
+  authorName           String
+  authorRole           String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([appointmentId])
+  @@index([noteType])
+  @@index([authorId])
+}
+
+// AppointmentAttachment - Files attached to appointments
+model AppointmentAttachment {
+  id                   String                @id @default(uuid())
+  appointmentId        String
+  appointment          Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  attachmentType       String                // Document, Image, Form, etc.
+  filename             String
+  fileUrl              String
+  mimeType             String
+  fileSize             Int
+  description          String?
+  uploadedBy           String
+  uploadedAt           DateTime              @default(now())
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([appointmentId])
+  @@index([attachmentType])
+  @@index([uploadedAt])
+}
+
+// AppointmentCheckin - Check-in details for appointments
+model AppointmentCheckin {
+  id                   String                @id @default(uuid())
+  appointmentId        String                @unique
+  appointment          Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  checkinTime          DateTime
+  checkinMethod        String                // In Person, Kiosk, Mobile, Staff
+  checkedInBy          String?               // Staff who checked in the patient, if applicable
+  waitingTime          Int?                  // Time spent in waiting room (minutes)
+  roomAssignedTime     DateTime?
+  roomId               String?
+  checkoutTime         DateTime?
+  status               String                // Checked In, In Room, With Provider, Completed, Left Without Being Seen
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([appointmentId])
+  @@index([checkinTime])
+  @@index([status])
+}
+
+// AppointmentCancellation - Cancellation details
+model AppointmentCancellation {
+  id                   String                @id @default(uuid())
+  appointmentId        String                @unique
+  appointment          Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  cancellationTime     DateTime
+  cancellationReason   String
+  cancelledBy          String                // Patient, Provider, Staff
+  cancelledById        String
+  cancelledByName      String
+  notificationSent     Boolean               @default(false)
+  rescheduled          Boolean               @default(false)
+  newAppointmentId     String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([appointmentId])
+  @@index([cancellationTime])
+  @@index([cancelledBy])
+}
+
+// AppointmentFeedback - Patient feedback on appointments
+model AppointmentFeedback {
+  id                   String                @id @default(uuid())
+  appointmentId        String                @unique
+  appointment          Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patientId            String
+  rating               Int                   // 1-5 stars
+  comments             String?
+  providerRating       Int?                  // 1-5 stars
+  facilityRating       Int?                  // 1-5 stars
+  staffRating          Int?                  // 1-5 stars
+  waitTimeRating       Int?                  // 1-5 stars
+  feedbackDate         DateTime              @default(now())
+  reviewed             Boolean               @default(false)
+  reviewedBy           String?
+  reviewedDate         DateTime?
+  followupNeeded       Boolean               @default(false)
+  followupNotes        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([appointmentId])
+  @@index([patientId])
+  @@index([rating])
+  @@index([feedbackDate])
+}
+
+// Waitlist - Patient waitlist for appointments
+model Waitlist {
+  id                   String                @id @default(uuid())
+  waitlistId           String                @unique
+  name                 String
+  description          String?
+  providerId           String?
+  departmentId         String?
+  appointmentTypeId    String?
+  locationId           String?
+  maxDaysOut           Int?                  // Maximum days to look ahead
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  entries              WaitlistEntry[]
+  
+  @@index([waitlistId])
+  @@index([providerId])
+  @@index([departmentId])
+  @@index([appointmentTypeId])
+  @@index([isActive])
+}
+
+// WaitlistEntry - Patient entry on a waitlist
+model WaitlistEntry {
+  id                   String                @id @default(uuid())
+  waitlistId           String
+  waitlist             Waitlist              @relation(fields: [waitlistId], references: [id], onDelete: Cascade)
+  patientId            String
+  requestDateTime      DateTime              @default(now())
+  priority             String                @default("Normal") // Urgent, High, Normal, Low
+  requestedProviders   String[]
+  requestedDates       String[]              // Preferred dates
+  requestedTimeOfDay   String?               // Morning, Afternoon, Evening
+  reason               String?
+  notes                String?
+  status               String                @default("Active") // Active, Scheduled, Expired, Cancelled
+  contactPreference    String                // Phone, Email, SMS
+  contactInfo          String
+  appointmentId        String?               // Set when appointment is scheduled
+  appointment          Appointment?          @relation(fields: [appointmentId], references: [id])
+  contactAttempts      Int                   @default(0)
+  lastContactAttempt   DateTime?
+  contactNotes         String?
+  expirationDate       DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([waitlistId])
+  @@index([patientId])
+  @@index([requestDateTime])
+  @@index([priority])
+  @@index([status])
+}
+
+// RecurringAppointment - Templates for recurring appointments
+model RecurringAppointment {
+  id                   String                @id @default(uuid())
+  recurringId          String                @unique
+  patientId            String
+  providerId           String
+  appointmentTypeId    String
+  recurrencePattern    String                // Daily, Weekly, Monthly, Custom
+  frequency            Int                   @default(1) // Every X days/weeks/months
+  daysOfWeek           Int[]                 // 0=Sunday, 1=Monday, etc. (for Weekly)
+  dayOfMonth           Int?                  // For Monthly
+  startDate            DateTime
+  endDate              DateTime?
+  endAfterOccurrences  Int?
+  startTime            String                // HH:MM format
+  duration             Int                   // Duration in minutes
+  locationId           String?
+  departmentId         String?
+  status               String                @default("Active") // Active, Completed, Cancelled
+  reasonForVisit       String?
+  notes                String?
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([recurringId])
+  @@index([patientId])
+  @@index([providerId])
+  @@index([startDate])
+  @@index([status])
+}
+
+// CalendarIntegration - Integration with external calendars
+model CalendarIntegration {
+  id                   String                @id @default(uuid())
+  userId               String                @unique
+  calendarType         String                // Google, Outlook, iCal, etc.
+  calendarId           String
+  accessToken          String?
+  refreshToken         String?
+  tokenExpiry          DateTime?
+  syncEnabled          Boolean               @default(true)
+  lastSyncDateTime     DateTime?
+  syncStatus           String?
+  syncFrequency        Int                   @default(15) // Minutes between syncs
+  syncDirection        String                @default("Bidirectional") // Import, Export, Bidirectional
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([userId])
+  @@index([calendarType])
+  @@index([syncEnabled])
+}
+
+// AppointmentConflict - Record of scheduling conflicts
+model AppointmentConflict {
+  id                   String                @id @default(uuid())
+  conflictDateTime     DateTime
+  resourceType         String                // Provider, Room, Equipment, Patient
+  resourceId           String
+  requestedAppointmentDetails String
+  existingAppointmentId String?
+  resolutionStatus     String                // Unresolved, Rescheduled, Overridden, Cancelled
+  resolutionNotes      String?
+  resolvedBy           String?
+  resolvedDateTime     DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([conflictDateTime])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([resolutionStatus])
+}
+
+// SchedulingAuditLog - Audit trail for scheduling actions
+model SchedulingAuditLog {
+  id                   String                @id @default(uuid())
+  actionType           String                // Create, Update, Cancel, Reschedule, Check-in, etc.
+  resourceType         String                // Appointment, Schedule, Waitlist, etc.
+  resourceId           String
+  performedBy          String
+  performerRole        String
+  actionDateTime       DateTime              @default(now())
+  details              String
+  ipAddress            String?
+  userAgent            String?
+  createdAt            DateTime              @default(now())
+  
+  @@index([actionType])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([performedBy])
+  @@index([actionDateTime])
+}

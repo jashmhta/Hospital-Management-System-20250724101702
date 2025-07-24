@@ -1,0 +1,369 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hms-waf-ingress
+  namespace: hms
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules: "true"
+    nginx.ingress.kubernetes.io/modsecurity-transaction-id: "$request_id"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      # General Security Settings
+      SecRuleEngine On
+      SecRequestBodyAccess On
+      SecResponseBodyAccess On
+      SecResponseBodyMimeType text/plain text/html text/xml application/json application/xml
+      SecDefaultAction "phase:1,log,auditlog,deny,status:403"
+
+      # OWASP CRS Core Rules
+      # Enable OWASP CRS (Core Rule Set)
+      Include /etc/nginx/owasp-modsecurity-crs/nginx-modsecurity.conf
+
+      # Custom HMS-specific rules
+      # Protect PHI/PII data exposure
+      SecRule RESPONSE_BODY "@rx (social security|ssn|credit card|creditcard|cvv|passport|driver license|medical record)" \
+        "id:1001,phase:4,deny,status:403,log,msg:'Potential PHI/PII data leak detected'"
+
+      # Prevent CSRF attacks
+      SecRule REQUEST_HEADERS:Origin "!@beginsWith https://hms.example.com" \
+        "id:1002,phase:1,deny,status:403,log,msg:'Invalid Origin for CSRF protection'"
+
+      # Limit file upload sizes for specific endpoints
+      SecRule REQUEST_URI "@beginsWith /api/documents/upload" \
+        "id:1003,phase:1,chain"
+      SecRule REQUEST_HEADERS:Content-Length "!@lt 10485760" \
+        "t:none,deny,status:413,log,msg:'File upload too large (>10MB)'"
+
+      # Block common attack patterns
+      SecRule REQUEST_COOKIES|REQUEST_COOKIES_NAMES|REQUEST_HEADERS|ARGS|ARGS_NAMES|REQUEST_BODY "@rx (?:union select|select sleep|waitfor delay|select pg_sleep|select benchmark)" \
+        "id:1004,phase:2,deny,status:403,log,msg:'SQL Injection attempt detected'"
+
+      # Block specific API abuse patterns
+      SecRule REQUEST_URI "@beginsWith /api/auth" \
+        "id:1005,phase:1,chain"
+      SecRule &ARGS:password "@eq 1" \
+        "t:none,skipAfter:END_AUTH_RATE_LIMIT"
+      SecRule &ARGS:username "@eq 1" \
+        "t:none,setvar:'ip.auth_attempt=+1',setvar:'ip.auth_timestamp=%{TIME}'"
+      SecRule IP:auth_attempt "@gt 5" \
+        "id:1006,chain,drop,msg:'Authentication rate limit exceeded'"
+      SecRule IP:auth_timestamp "@lt %{TIME_EPOCH}-300" \
+        "t:none,setvar:'ip.auth_attempt=0'"
+      SecMarker END_AUTH_RATE_LIMIT
+
+      # Rate limiting
+      SecAction "id:1007,phase:1,initcol:ip=%{REMOTE_ADDR},nolog"
+      SecRule REQUEST_URI "@beginsWith /api" \
+        "id:1008,phase:1,setvar:'ip.requests=+1',nolog"
+      SecRule IP:requests "@gt 200" \
+        "id:1009,phase:1,pause:300,deny,status:429,log,msg:'API rate limit exceeded'"
+
+      # DDoS Protection
+      SecAction "id:1010,phase:1,t:none,nolog,pass,setvar:tx.dos_burst_time_slice=60,setvar:tx.dos_counter_threshold=100,setvar:tx.dos_block_timeout=600"
+      SecRule REMOTE_ADDR "!@ipMatch 192.168.0.0/16,10.0.0.0/8,172.16.0.0/12" \
+        "id:1011,phase:1,nolog,pass,setvar:tx.block_search_ip=%{tx.block_search_ip}, setvar:tx.real_ip=%{REMOTE_ADDR}"
+
+      # Paranoia Level
+      SecAction "id:1012,phase:1,t:none,nolog,pass,setvar:tx.paranoia_level=2"
+
+      # Performance settings
+      SecCollectionTimeout 600
+      SecRequestBodyLimit 13107200
+      SecRequestBodyNoFilesLimit 131072
+      SecResponseBodyLimit 1048576
+
+    # ModSecurity audit logging
+    nginx.ingress.kubernetes.io/modsecurity-audit-log: "true"
+    nginx.ingress.kubernetes.io/modsecurity-audit-log-type: "Serial"
+    nginx.ingress.kubernetes.io/modsecurity-audit-log-dest: "file:/var/log/modsec_audit.log"
+
+    # Rate Limiting
+    nginx.ingress.kubernetes.io/limit-connections: "60"
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-rpm: "1200"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "5"
+
+    # Additional Security Headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.hms.local; frame-ancestors 'self'; form-action 'self'";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Feature-Policy: camera 'none'; microphone 'none'; geolocation 'none'";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=()";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+
+    # DDoS Protection
+    nginx.ingress.kubernetes.io/server-snippet: |
+      limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+      limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=3r/s;
+      limit_conn_zone $binary_remote_addr zone=conn_limit:10m;
+
+      # Apply limits
+      location /api/ {
+        limit_req zone=api_limit burst=20 nodelay;
+        limit_conn conn_limit 10;
+      }
+
+      location /api/auth/ {
+        limit_req zone=auth_limit burst=5 nodelay;
+        limit_conn conn_limit 5;
+      }
+spec:
+  rules:
+    - host: api.hms.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hms-api-gateway
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hms-network-policy
+  namespace: hms
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+        - namespaceSelector:
+            matchLabels:
+              name: istio-system
+        - namespaceSelector:
+            matchLabels:
+              name: security
+        - podSelector: {}
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: hms
+        - namespaceSelector:
+            matchLabels:
+              name: observability
+        - namespaceSelector:
+            matchLabels:
+              name: event-streaming
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: waf-monitoring
+  namespace: security
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: waf-monitoring
+  template:
+    metadata:
+      labels:
+        app: waf-monitoring
+    spec:
+      containers:
+        - name: waf-monitor
+          image: ubuntu:20.04
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              apt-get update && 
+              apt-get install -y curl jq logrotate python3 python3-pip && 
+              pip3 install elasticsearch prometheus_client && 
+
+              while true; do
+                # Process modsec audit logs and ship to ELK
+                python3 /scripts/process_modsec_logs.py
+                
+                # Export metrics for Prometheus
+                python3 /scripts/export_waf_metrics.py
+                
+                # Sleep for a minute
+                sleep 60
+              done
+          volumeMounts:
+            - name: modsec-logs
+              mountPath: /var/log/modsec
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: modsec-logs
+          hostPath:
+            path: /var/log/modsec
+        - name: scripts
+          configMap:
+            name: waf-monitoring-scripts
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: waf-monitoring-scripts
+  namespace: security
+data:
+  process_modsec_logs.py: |
+    #!/usr/bin/env python3
+
+    import json
+    import re
+    import os
+    import time
+    from datetime import datetime
+    from elasticsearch import Elasticsearch
+
+    # Connect to Elasticsearch
+    es = Elasticsearch(['elasticsearch.observability.svc:9200'])
+
+    # Process ModSecurity audit logs
+    log_dir = "/var/log/modsec"
+    log_pattern = re.compile(r'ModSecurity: (\w+)\. (.+) \[file "([^"]+)"\] \[line "(\d+)"\] \[id "(\d+)"\]')
+
+    def process_log_file(log_file):
+        with open(log_file, 'r') as f:
+            for line in f:
+                match = log_pattern.search(line)
+                if match:
+                    action, message, rule_file, line_num, rule_id = match.groups()
+                    
+                    # Extract timestamp
+                    timestamp_match = re.search(r'\[([^\]]+)\]', line)
+                    timestamp = datetime.now().isoformat()
+                    if timestamp_match:
+                        try:
+                            timestamp = datetime.strptime(timestamp_match.group(1), '%d/%b/%Y:%H:%M:%S %z').isoformat()
+                        except:
+                            pass
+                    
+                    # Extract client IP
+                    ip_match = re.search(r'client: (\d+\.\d+\.\d+\.\d+)', line)
+                    client_ip = ip_match.group(1) if ip_match else 'unknown'
+                    
+                    # Extract request URI
+                    uri_match = re.search(r'uri: "([^"]+)"', line)
+                    uri = uri_match.group(1) if uri_match else 'unknown'
+                    
+                    # Create document for Elasticsearch
+                    doc = {
+                        'timestamp': timestamp,
+                        'action': action,
+                        'message': message,
+                        'rule_file': rule_file,
+                        'line_num': int(line_num),
+                        'rule_id': rule_id,
+                        'client_ip': client_ip,
+                        'uri': uri,
+                        'raw_log': line.strip()
+                    }
+                    
+                    # Index in Elasticsearch
+                    index_name = f"modsec-audit-{datetime.now().strftime('%Y.%m.%d')}"
+                    try:
+                        es.index(index=index_name, document=doc)
+                    except Exception as e:
+                        print(f"Error indexing to Elasticsearch: {e}")
+
+    # Process all log files
+    for filename in os.listdir(log_dir):
+        if filename.endswith('.log'):
+            process_log_file(os.path.join(log_dir, filename))
+
+  export_waf_metrics.py: |
+    #!/usr/bin/env python3
+
+    import time
+    import json
+    import os
+    import re
+    from prometheus_client import start_http_server, Counter, Gauge, Histogram
+
+    # Define Prometheus metrics
+    waf_blocks = Counter('waf_blocks_total', 'Total WAF blocks', ['rule_id', 'action'])
+    waf_requests = Counter('waf_requests_total', 'Total WAF processed requests')
+    waf_latency = Histogram('waf_processing_seconds', 'WAF processing time in seconds')
+    waf_rules_triggered = Counter('waf_rules_triggered_total', 'WAF rules triggered', ['rule_id'])
+
+    # Start Prometheus HTTP server
+    start_http_server(8000)
+
+    # Process ModSecurity audit logs
+    log_dir = "/var/log/modsec"
+    log_pattern = re.compile(r'ModSecurity: (\w+)\. (.+) \[file "([^"]+)"\] \[line "(\d+)"\] \[id "(\d+)"\]')
+    processed_lines = set()
+
+    def process_log_file(log_file):
+        with open(log_file, 'r') as f:
+            for line in f:
+                line_hash = hash(line)
+                
+                # Skip already processed lines
+                if line_hash in processed_lines:
+                    continue
+                    
+                processed_lines.add(line_hash)
+                
+                # Extract metrics
+                match = log_pattern.search(line)
+                if match:
+                    action, message, rule_file, line_num, rule_id = match.groups()
+                    
+                    # Update metrics
+                    waf_requests.inc()
+                    
+                    if action.lower() in ('warning', 'block', 'deny'):
+                        waf_blocks.labels(rule_id=rule_id, action=action.lower()).inc()
+                    
+                    waf_rules_triggered.labels(rule_id=rule_id).inc()
+                    
+                    # Simulated processing time (for demonstration)
+                    with waf_latency.time():
+                        time.sleep(0.001)  # 1ms to simulate processing
+
+    # Main loop
+    while True:
+        # Process all log files
+        for filename in os.listdir(log_dir):
+            if filename.endswith('.log'):
+                process_log_file(os.path.join(log_dir, filename))
+        
+        # Clean up processed lines set periodically to avoid memory issues
+        if len(processed_lines) > 100000:
+            processed_lines = set(list(processed_lines)[-50000:])
+            
+        time.sleep(10)  # Check every 10 seconds

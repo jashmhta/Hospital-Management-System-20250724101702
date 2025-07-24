@@ -1,0 +1,180 @@
+{
+	"compilerOptions": {
+		/* Language and Environment */
+		"target": "ES2022",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"useDefineForClassFields": true,
+
+		/* Modules */
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": false,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": false,
+
+		/* JavaScript Support */
+		"allowJs": false,
+		"checkJs": false,
+
+		/* Emit */
+		"declaration": true,
+		"declarationMap": true,
+		"emitDeclarationOnly": false,
+		"sourceMap": true,
+		"outDir": "./dist",
+		"removeComments": false,
+		"noEmit": false,
+		"importHelpers": true,
+		"downlevelIteration": true,
+		"sourceRoot": "",
+
+		/* Interop Constraints */
+		"esModuleInterop": true,
+		"allowSyntheticDefaultImports": true,
+		"forceConsistentCasingInFileNames": true,
+
+		/* Type Checking - ULTRA STRICT */
+		"strict": true,
+		"noImplicitAny": true,
+		"strictNullChecks": true,
+		"strictFunctionTypes": true,
+		"strictBindCallApply": true,
+		"strictPropertyInitialization": true,
+		"noImplicitThis": true,
+		"useUnknownInCatchVariables": true,
+		"alwaysStrict": true,
+
+		/* Additional Checks */
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"exactOptionalPropertyTypes": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"noPropertyAccessFromIndexSignature": true,
+
+		/* Completeness */
+		"skipLibCheck": false,
+
+		/* Enterprise Security */
+		"allowUnreachableCode": false,
+		"allowUnusedLabels": false,
+		"noImplicitUseStrict": false,
+
+		/* Performance */
+		"incremental": true,
+		"tsBuildInfoFile": ".tsbuildinfo",
+		"composite": false,
+
+		/* Advanced */
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"preserveConstEnums": true,
+		"preserveValueImports": false,
+
+		/* JSX */
+		"jsx": "preserve",
+		"jsxFactory": "React.createElement",
+		"jsxFragmentFactory": "React.Fragment",
+		"jsxImportSource": "react",
+
+		/* Base URL and Path Mapping */
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"],
+			"@/components/*": ["./src/components/*"],
+			"@/lib/*": ["./src/lib/*"],
+			"@/types/*": ["./src/types/*"],
+			"@/services/*": ["./src/services/*"],
+			"@/hooks/*": ["./src/hooks/*"],
+			"@/utils/*": ["./src/lib/utils/*"],
+			"@/config/*": ["./src/config/*"],
+			"@shared/*": ["./shared/src/*"],
+			"@microservices/*": ["./microservices/*/src/*"],
+			"@api/*": ["./src/app/api/*"],
+			"@prisma/*": ["./prisma/*"],
+			"@fhir/*": ["./src/lib/fhir/*"],
+			"@security/*": ["./src/lib/security/*"],
+			"@compliance/*": ["./src/lib/compliance/*"],
+			"@monitoring/*": ["./src/lib/monitoring/*"],
+			"@analytics/*": ["./src/lib/analytics/*"]
+		},
+
+		/* Type Roots */
+		"typeRoots": [
+			"./node_modules/@types",
+			"./src/types",
+			"./shared/types",
+			"./microservices/shared/types"
+		],
+
+		/* Types */
+		"types": [
+			"node",
+			"jest",
+			"@testing-library/jest-dom",
+			"@types/react",
+			"@types/react-dom",
+			"@cloudflare/workers-types"
+		]
+	},
+
+	/* Include Patterns */
+	"include": [
+		"src/**/*.ts",
+		"src/**/*.tsx",
+		"src/**/*.js",
+		"src/**/*.jsx",
+		"tests/**/*.ts",
+		"tests/**/*.tsx",
+		"shared/**/*.ts",
+		"shared/**/*.tsx",
+		"microservices/**/*.ts",
+		"microservices/**/*.tsx",
+		"scripts/**/*.ts",
+		"scripts/**/*.js",
+		"prisma/**/*.ts",
+		"*.config.ts",
+		"*.config.js",
+		".next/types/**/*.ts",
+		"next-env.d.ts",
+		"env.d.ts"
+	],
+
+	/* Exclude Patterns */
+	"exclude": [
+		"node_modules",
+		".next",
+		"dist",
+		"build",
+		"coverage",
+		"*.min.js",
+		"**/*.min.js",
+		"public/sw.js",
+		"public/workbox-*.js",
+		"microservices/*/target",
+		"microservices/*/build",
+		"**/*.test.js",
+		"**/*.spec.js"
+	],
+
+	/* TypeScript ESLint Parser Options */
+	"ts-node": {
+		"esm": true,
+		"compilerOptions": {
+			"module": "ESNext",
+			"moduleResolution": "node"
+		}
+	},
+
+	/* Watch Options */
+	"watchOptions": {
+		"watchFile": "useFsEvents",
+		"watchDirectory": "useFsEvents",
+		"fallbackPolling": "dynamicPriority",
+		"synchronousWatchDirectory": true,
+		"excludeDirectories": ["**/node_modules", "**/.git"]
+	}
+}

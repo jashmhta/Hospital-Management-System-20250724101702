@@ -1,0 +1,529 @@
+// Telehealth Platform Schema
+// This schema extends the Hospital Management System with telehealth functionality
+
+// TelehealthProvider model
+model TelehealthProvider {
+  id                 String               @id @default(uuid())
+  providerId         String               @unique // Reference to Provider/Staff model
+  isActive           Boolean              @default(true)
+  specialties        String[]             // Array of specialties offered via telehealth
+  availableServices  String[]             // Array of service types (consultation, follow-up, etc.)
+  maxDailyAppointments Int                @default(20)
+  preferredPlatform  String?              // Zoom, Teams, Custom, etc.
+  platformCredentials Json?               // JSON containing platform-specific credentials
+  virtualWaitingRoom Boolean              @default(true)
+  allowsUrgentCare   Boolean              @default(false)
+  availabilityHours  Json                 // JSON containing availability schedule
+  telehealthRating   Float?               // Average rating (1-5)
+  totalSessions      Int                  @default(0)
+  lastSessionDate    DateTime?
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  // Relations
+  sessions           TelehealthSession[]
+  ratings            ProviderRating[]
+  templates          TelehealthTemplate[] 
+  
+  @@index([providerId])
+  @@index([isActive])
+  @@index([allowsUrgentCare])
+}
+
+// TelehealthPatient model
+model TelehealthPatient {
+  id                 String               @id @default(uuid())
+  patientId          String               @unique // Reference to Patient model
+  consentSigned      Boolean              @default(false)
+  consentDate        DateTime?
+  consentDocumentUrl String?
+  preferredPlatform  String?              // Zoom, Teams, Custom, etc.
+  deviceType         String?              // Smartphone, Tablet, Computer
+  internetQuality    String?              // Good, Fair, Poor
+  hasCamera          Boolean              @default(true)
+  hasMicrophone      Boolean              @default(true)
+  needsAssistance    Boolean              @default(false)
+  assistanceNotes    String?
+  preferredLanguage  String               @default("en")
+  interpreterNeeded  Boolean              @default(false)
+  totalSessions      Int                  @default(0)
+  lastSessionDate    DateTime?
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  // Relations
+  sessions           TelehealthSession[]
+  
+  @@index([patientId])
+  @@index([consentSigned])
+  @@index([needsAssistance])
+  @@index([interpreterNeeded])
+}
+
+// TelehealthSession model
+model TelehealthSession {
+  id                 String               @id @default(uuid())
+  sessionNumber      String               @unique
+  providerId         String
+  provider           TelehealthProvider   @relation(fields: [providerId], references: [id])
+  patientId          String
+  patient            TelehealthPatient    @relation(fields: [patientId], references: [id])
+  appointmentId      String?              // Reference to Appointment model if applicable
+  sessionType        String               // Initial Consultation, Follow-up, Urgent Care, etc.
+  scheduledStartTime DateTime
+  scheduledEndTime   DateTime
+  actualStartTime    DateTime?
+  actualEndTime      DateTime?
+  duration           Int?                 // Actual duration in minutes
+  status             String               // Scheduled, In Progress, Completed, Cancelled, No-Show
+  platform           String               // Zoom, Teams, Custom, etc.
+  meetingId          String?
+  meetingUrl         String?
+  meetingPassword    String?
+  recordingEnabled   Boolean              @default(false)
+  recordingUrl       String?
+  consentObtained    Boolean              @default(false)
+  chiefComplaint     String?
+  visitReason        String?
+  technicalIssues    String?
+  followUpRequired   Boolean              @default(false)
+  followUpNotes      String?
+  billableMinutes    Int?
+  billingCode        String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  // Relations
+  sessionNotes       TelehealthSessionNote[]
+  prescriptions      TelehealthPrescription[]
+  orders             TelehealthOrder[]
+  surveys            TelehealthSurvey[]
+  ratings            SessionRating[]
+  
+  @@index([providerId])
+  @@index([patientId])
+  @@index([appointmentId])
+  @@index([sessionType])
+  @@index([scheduledStartTime])
+  @@index([status])
+}
+
+// TelehealthSessionNote model
+model TelehealthSessionNote {
+  id                 String               @id @default(uuid())
+  sessionId          String
+  session            TelehealthSession    @relation(fields: [sessionId], references: [id])
+  noteType           String               // SOAP, Progress, Encounter, etc.
+  content            String
+  authorId           String               // Staff ID who authored the note
+  authorRole         String               // Provider, Nurse, etc.
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([sessionId])
+  @@index([noteType])
+}
+
+// TelehealthPrescription model
+model TelehealthPrescription {
+  id                 String               @id @default(uuid())
+  prescriptionNumber String               @unique
+  sessionId          String
+  session            TelehealthSession    @relation(fields: [sessionId], references: [id])
+  patientId          String               // Reference to Patient model
+  providerId         String               // Reference to Provider model
+  medicationName     String
+  dosage             String
+  frequency          String
+  route              String
+  quantity           String
+  refills            Int
+  startDate          DateTime
+  endDate            DateTime?
+  instructions       String?
+  diagnosis          String?
+  isControlled       Boolean              @default(false)
+  sentToPharmacy     Boolean              @default(false)
+  pharmacyName       String?
+  pharmacyAddress    String?
+  pharmacyPhone      String?
+  status             String               // Pending, Sent, Filled, Cancelled
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([sessionId])
+  @@index([patientId])
+  @@index([providerId])
+  @@index([isControlled])
+  @@index([status])
+}
+
+// TelehealthOrder model
+model TelehealthOrder {
+  id                 String               @id @default(uuid())
+  orderNumber        String               @unique
+  sessionId          String
+  session            TelehealthSession    @relation(fields: [sessionId], references: [id])
+  patientId          String               // Reference to Patient model
+  providerId         String               // Reference to Provider model
+  orderType          String               // Lab, Imaging, Referral, etc.
+  orderDetails       String
+  orderingReason     String
+  priority           String               // Routine, Urgent, STAT
+  status             String               // Ordered, In Progress, Completed, Cancelled
+  orderDate          DateTime             @default(now())
+  scheduledDate      DateTime?
+  completedDate      DateTime?
+  results            String?
+  resultDocumentUrl  String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([sessionId])
+  @@index([patientId])
+  @@index([providerId])
+  @@index([orderType])
+  @@index([priority])
+  @@index([status])
+}
+
+// TelehealthSurvey model
+model TelehealthSurvey {
+  id                 String               @id @default(uuid())
+  surveyNumber       String               @unique
+  sessionId          String
+  session            TelehealthSession    @relation(fields: [sessionId], references: [id])
+  patientId          String               // Reference to Patient model
+  surveyType         String               // Pre-visit, Post-visit, Follow-up, Satisfaction
+  surveyTemplate     String
+  sentDate           DateTime
+  completedDate      DateTime?
+  responses          Json?                // JSON containing survey responses
+  score              Float?               // Calculated score if applicable
+  feedback           String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([sessionId])
+  @@index([patientId])
+  @@index([surveyType])
+  @@index([sentDate])
+}
+
+// ProviderRating model
+model ProviderRating {
+  id                 String               @id @default(uuid())
+  providerId         String
+  provider           TelehealthProvider   @relation(fields: [providerId], references: [id])
+  patientId          String               // Reference to Patient model
+  rating             Int                  // 1-5 rating
+  comment            String?
+  ratingDate         DateTime             @default(now())
+  isAnonymous        Boolean              @default(false)
+  isPublished        Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  
+  @@index([providerId])
+  @@index([patientId])
+  @@index([rating])
+  @@index([isPublished])
+}
+
+// SessionRating model
+model SessionRating {
+  id                 String               @id @default(uuid())
+  sessionId          String
+  session            TelehealthSession    @relation(fields: [sessionId], references: [id])
+  patientId          String               // Reference to Patient model
+  overallRating      Int                  // 1-5 rating
+  technicalQuality   Int?                 // 1-5 rating
+  providerRating     Int?                 // 1-5 rating
+  waitTime           Int?                 // 1-5 rating
+  comment            String?
+  suggestions        String?
+  ratingDate         DateTime             @default(now())
+  createdAt          DateTime             @default(now())
+  
+  @@index([sessionId])
+  @@index([patientId])
+  @@index([overallRating])
+}
+
+// TelehealthTemplate model
+model TelehealthTemplate {
+  id                 String               @id @default(uuid())
+  templateName       String
+  templateType       String               // SOAP, Assessment, Treatment Plan, etc.
+  providerId         String
+  provider           TelehealthProvider   @relation(fields: [providerId], references: [id])
+  specialty          String?
+  content            String               // Template content with placeholders
+  isShared           Boolean              @default(false)
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([providerId])
+  @@index([templateType])
+  @@index([specialty])
+  @@index([isShared])
+  @@index([isActive])
+}
+
+// TelehealthEligibility model
+model TelehealthEligibility {
+  id                 String               @id @default(uuid())
+  patientId          String               @unique // Reference to Patient model
+  insuranceVerified  Boolean              @default(false)
+  verificationDate   DateTime?
+  insuranceAllows    Boolean              @default(false)
+  coverageDetails    String?
+  stateEligible      Boolean              @default(true)  // Based on provider licensing and patient location
+  patientLocation    String?              // State or jurisdiction
+  providerLicenses   String[]             // Array of states where provider is licensed
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([patientId])
+  @@index([insuranceVerified])
+  @@index([insuranceAllows])
+  @@index([stateEligible])
+}
+
+// VirtualWaitingRoom model
+model VirtualWaitingRoom {
+  id                 String               @id @default(uuid())
+  providerId         String               // Reference to Provider model
+  waitingRoomName    String               @default("Virtual Waiting Room")
+  isActive           Boolean              @default(true)
+  customMessage      String?
+  estimatedWaitTime  Int?                 // Estimated wait time in minutes
+  maxCapacity        Int                  @default(30)
+  currentCount       Int                  @default(0)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  // Relations
+  waitingPatients    WaitingPatient[]
+  
+  @@index([providerId])
+  @@index([isActive])
+}
+
+// WaitingPatient model
+model WaitingPatient {
+  id                 String               @id @default(uuid())
+  waitingRoomId      String
+  waitingRoom        VirtualWaitingRoom   @relation(fields: [waitingRoomId], references: [id])
+  patientId          String               // Reference to Patient model
+  sessionId          String?              // Reference to TelehealthSession if applicable
+  checkInTime        DateTime             @default(now())
+  estimatedStartTime DateTime?
+  priority           String               @default("Normal") // Normal, Urgent, Priority
+  status             String               // Waiting, In Session, Completed, Left
+  waitDuration       Int?                 // Wait duration in minutes
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([waitingRoomId])
+  @@index([patientId])
+  @@index([sessionId])
+  @@index([checkInTime])
+  @@index([priority])
+  @@index([status])
+}
+
+// RemoteMonitoring model
+model RemoteMonitoring {
+  id                 String               @id @default(uuid())
+  programName        String
+  description        String?
+  isActive           Boolean              @default(true)
+  programType        String               // Chronic Disease, Post-discharge, Preventive, etc.
+  monitoringParameters String[]           // Array of parameters to monitor
+  frequency          String               // Daily, Weekly, Continuous, etc.
+  alertThresholds    Json?                // JSON containing alert thresholds
+  requiredDevices    String[]             // Array of required monitoring devices
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  // Relations
+  enrolledPatients   MonitoringEnrollment[]
+  
+  @@index([programType])
+  @@index([isActive])
+}
+
+// MonitoringEnrollment model
+model MonitoringEnrollment {
+  id                 String               @id @default(uuid())
+  monitoringId       String
+  monitoring         RemoteMonitoring     @relation(fields: [monitoringId], references: [id])
+  patientId          String               // Reference to Patient model
+  providerId         String               // Reference to Provider model
+  enrollmentDate     DateTime             @default(now())
+  endDate            DateTime?
+  status             String               // Active, Paused, Completed, Withdrawn
+  deviceProvided     Boolean              @default(false)
+  deviceDetails      String?
+  customParameters   Json?                // JSON containing patient-specific parameters
+  customThresholds   Json?                // JSON containing patient-specific thresholds
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  // Relations
+  readings           MonitoringReading[]
+  alerts             MonitoringAlert[]
+  
+  @@index([monitoringId])
+  @@index([patientId])
+  @@index([providerId])
+  @@index([status])
+}
+
+// MonitoringReading model
+model MonitoringReading {
+  id                 String               @id @default(uuid())
+  enrollmentId       String
+  enrollment         MonitoringEnrollment @relation(fields: [enrollmentId], references: [id])
+  readingDate        DateTime             @default(now())
+  readingType        String               // BloodPressure, Weight, BloodGlucose, etc.
+  readingValue       Float
+  readingUnit        String
+  deviceId           String?              // Device ID if available
+  isManualEntry      Boolean              @default(false)
+  notes              String?
+  createdAt          DateTime             @default(now())
+  
+  @@index([enrollmentId])
+  @@index([readingDate])
+  @@index([readingType])
+}
+
+// MonitoringAlert model
+model MonitoringAlert {
+  id                 String               @id @default(uuid())
+  enrollmentId       String
+  enrollment         MonitoringEnrollment @relation(fields: [enrollmentId], references: [id])
+  alertDate          DateTime             @default(now())
+  alertType          String               // OutOfRange, MissedReading, TrendAlert, etc.
+  alertSeverity      String               // Low, Medium, High, Critical
+  alertDetails       String
+  readingId          String?              // Reference to MonitoringReading if applicable
+  isAcknowledged     Boolean              @default(false)
+  acknowledgedById   String?              // Staff ID who acknowledged the alert
+  acknowledgedDate   DateTime?
+  actionTaken        String?
+  resolutionNotes    String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([enrollmentId])
+  @@index([alertDate])
+  @@index([alertType])
+  @@index([alertSeverity])
+  @@index([isAcknowledged])
+}
+
+// TelehealthAvailability model
+model TelehealthAvailability {
+  id                 String               @id @default(uuid())
+  providerId         String               // Reference to Provider model
+  dayOfWeek          Int                  // 1 (Monday) to 7 (Sunday)
+  startTime          String               // HH:MM format
+  endTime            String               // HH:MM format
+  isAvailable        Boolean              @default(true)
+  maxAppointments    Int?
+  appointmentTypes   String[]             // Array of allowed appointment types
+  notes              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([providerId])
+  @@index([dayOfWeek])
+  @@index([isAvailable])
+}
+
+// TelehealthSpecialEvent model
+model TelehealthSpecialEvent {
+  id                 String               @id @default(uuid())
+  providerId         String               // Reference to Provider model
+  eventDate          DateTime
+  startTime          String               // HH:MM format
+  endTime            String               // HH:MM format
+  eventType          String               // Unavailable, Extended Hours, Limited Availability
+  reason             String?
+  affectsAvailability Boolean             @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([providerId])
+  @@index([eventDate])
+  @@index([eventType])
+  @@index([affectsAvailability])
+}
+
+// TelehealthAuditLog model
+model TelehealthAuditLog {
+  id                 String               @id @default(uuid())
+  logDate            DateTime             @default(now())
+  actorId            String               // Staff ID or Patient ID
+  actorType          String               // Provider, Patient, Staff
+  actionType         String               // Login, Logout, StartSession, EndSession, Prescription, etc.
+  sessionId          String?              // Reference to TelehealthSession if applicable
+  patientId          String?              // Reference to Patient model if applicable
+  providerId         String?              // Reference to Provider model if applicable
+  details            String?
+  ipAddress          String?
+  deviceInfo         String?
+  location           String?              // Geographic location if available
+  createdAt          DateTime             @default(now())
+  
+  @@index([logDate])
+  @@index([actorId])
+  @@index([actorType])
+  @@index([actionType])
+  @@index([sessionId])
+  @@index([patientId])
+  @@index([providerId])
+}
+
+// TelehealthConfig model
+model TelehealthConfig {
+  id                 String               @id @default(uuid())
+  configKey          String               @unique
+  configValue        String
+  configType         String               // System, Provider, Patient
+  description        String?
+  isEncrypted        Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([configKey])
+  @@index([configType])
+}
+
+// TelehealthIntegration model
+model TelehealthIntegration {
+  id                 String               @id @default(uuid())
+  integrationName    String
+  integrationType    String               // EHR, Payment, Scheduling, Video
+  vendorName         String
+  apiEndpoint        String?
+  apiKey             String?
+  apiSecret          String?
+  isActive           Boolean              @default(true)
+  lastSyncDate       DateTime?
+  syncFrequency      String?              // Hourly, Daily, Weekly, Real-time
+  configurationJson  Json?                // JSON containing additional configuration
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  
+  @@index([integrationType])
+  @@index([vendorName])
+  @@index([isActive])
+}

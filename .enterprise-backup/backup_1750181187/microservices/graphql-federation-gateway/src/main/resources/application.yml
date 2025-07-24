@@ -1,0 +1,235 @@
+# HMS GraphQL Federation Gateway Configuration
+spring:
+  application:
+    name: hms-graphql-federation-gateway
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # GraphQL Configuration
+  graphql:
+    websocket:
+      path: /graphql-ws
+    web:
+      path: /graphql
+    cors:
+      allowed-origins: "*"
+      allowed-methods: GET, POST
+      allowed-headers: "*"
+
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300000 # 5 minutes
+
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:3}
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8086}
+  servlet:
+    context-path: /graphql-gateway
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,graphql
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# DGS Configuration
+dgs:
+  graphql:
+    federation:
+      enabled: true
+    introspection:
+      enabled: ${GRAPHQL_INTROSPECTION_ENABLED:true}
+    graphiql:
+      enabled: ${GRAPHIQL_ENABLED:true}
+      path: /graphiql
+
+# GraphQL Federation Gateway Specific Configuration
+graphql:
+  federation:
+    services:
+      patient-management:
+        url: http://patient-management-service/graphql
+        health-check: /actuator/health
+      appointment-scheduling:
+        url: http://appointment-scheduling-service/graphql
+        health-check: /actuator/health
+      billing:
+        url: http://billing-service/graphql
+        health-check: /actuator/health
+      clinical-notes:
+        url: http://clinical-notes-service/graphql
+        health-check: /actuator/health
+      hie-integration:
+        url: http://hie-integration-service/graphql
+        health-check: /actuator/health
+      clinical-decision-support:
+        url: http://clinical-decision-support-service/graphql
+        health-check: /actuator/health
+
+    # Query Optimization
+    query:
+      max-depth: 15
+      max-complexity: 1000
+      timeout-seconds: 30
+      enable-tracing: true
+
+    # Caching
+    cache:
+      enabled: true
+      default-ttl-seconds: 300
+      max-entries: 10000
+
+    # Security
+    security:
+      enable-introspection: ${GRAPHQL_INTROSPECTION_ENABLED:true}
+      enable-playground: ${GRAPHIQL_ENABLED:true}
+      cors-enabled: true
+
+    # Performance
+    performance:
+      enable-data-loader: true
+      batch-loading: true
+      max-batch-size: 100
+      enable-query-complexity-analysis: true
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      graphql-federation:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+
+  retry:
+    instances:
+      graphql-federation:
+        max-attempts: 3
+        wait-duration: 1s
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms.graphql: ${LOG_LEVEL:INFO}
+    com.netflix.graphql.dgs: ${DGS_LOG_LEVEL:INFO}
+    graphql: ${GRAPHQL_LOG_LEVEL:WARN}
+    root: ${ROOT_LOG_LEVEL:INFO}
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    com.hospital.hms.graphql: DEBUG
+    com.netflix.graphql.dgs: DEBUG
+    graphql: DEBUG
+
+dgs:
+  graphql:
+    introspection:
+      enabled: true
+    graphiql:
+      enabled: true
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    com.hospital.hms.graphql: INFO
+    com.netflix.graphql.dgs: WARN
+    graphql: WARN
+    root: WARN
+
+dgs:
+  graphql:
+    introspection:
+      enabled: false
+    graphiql:
+      enabled: false
+
+graphql:
+  federation:
+    security:
+      enable-introspection: false
+      enable-playground: false
+    performance:
+      enable-query-complexity-analysis: true
+
+---
+# HMS-specific GraphQL Federation Configuration
+hms:
+  graphql:
+    federation:
+      enabled: true
+      schema:
+        auto-reload: true
+        reload-interval: 300000 # 5 minutes
+      security:
+        hipaa-filtering: true
+        audit-logging: true
+        authentication-required: true
+        role-based-access: true
+      performance:
+        query-timeout: 30000 # 30 seconds
+        max-query-depth: 15
+        max-query-complexity: 1000
+        caching-enabled: true
+        cache-ttl: 300000 # 5 minutes
+      healthcare:
+        critical-services:
+          - patient-management
+          - emergency-service
+          - clinical-documentation
+        data-masking:
+          enabled: true
+          patient-data: true
+          medical-records: true
+        compliance:
+          hipaa-validation: true
+          audit-trail: true
+          data-encryption: true
+      monitoring:
+        metrics-enabled: true
+        health-checks: true
+        performance-tracking: true
+        error-tracking: true

@@ -1,0 +1,52 @@
+tests/stress/stress-test.ts(154,23): error TS1005: ',' expected.
+tests/stress/stress-test.ts(169,15): error TS1005: ',' expected.
+tests/stress/stress-test.ts(171,23): error TS1005: ',' expected.
+tests/stress/stress-test.ts(207,26): error TS1005: ',' expected.
+tests/stress/stress-test.ts(210,27): error TS1005: ',' expected.
+tests/stress/stress-test.ts(211,39): error TS1005: ',' expected.
+tests/stress/stress-test.ts(214,3): error TS1136: Property assignment expected.
+tests/stress/stress-test.ts(216,11): error TS1005: ';' expected.
+tests/stress/stress-test.ts(217,9): error TS1005: ';' expected.
+tests/stress/stress-test.ts(219,15): error TS1005: ';' expected.
+tests/stress/stress-test.ts(221,11): error TS1005: ';' expected.
+tests/stress/stress-test.ts(222,3): error TS1109: Expression expected.
+tests/stress/stress-test.ts(222,4): error TS1128: Declaration or statement expected.
+tests/stress/stress-test.ts(223,1): error TS1128: Declaration or statement expected.
+tests/stress/stress-test.ts(232,60): error TS1005: ',' expected.
+tests/stress/stress-test.ts(233,3): error TS1136: Property assignment expected.
+tests/stress/stress-test.ts(235,20): error TS1005: ';' expected.
+tests/stress/stress-test.ts(237,31): error TS1005: ';' expected.
+tests/stress/stress-test.ts(239,4): error TS1128: Declaration or statement expected.
+tests/stress/stress-test.ts(242,13): error TS1005: ';' expected.
+tests/stress/stress-test.ts(244,4): error TS1128: Declaration or statement expected.
+tests/stress/stress-test.ts(258,1): error TS1109: Expression expected.
+tests/stress/stress-test.ts(299,41): error TS1005: ',' expected.
+tests/stress/stress-test.ts(579,21): error TS1005: ',' expected.
+tests/stress/stress-test.ts(581,23): error TS1005: ',' expected.
+tests/stress/stress-test.ts(610,21): error TS1005: ',' expected.
+tests/stress/stress-test.ts(612,24): error TS1005: ',' expected.
+tests/stress/stress-test.ts(698,9): error TS1109: Expression expected.
+tests/stress/stress-test.ts(704,63): error TS1109: Expression expected.
+tests/stress/stress-test.ts(705,63): error TS1109: Expression expected.
+tests/stress/stress-test.ts(706,67): error TS1109: Expression expected.
+tests/stress/stress-test.ts(707,59): error TS1109: Expression expected.
+tests/stress/stress-test.ts(708,59): error TS1109: Expression expected.
+tests/stress/stress-test.ts(709,65): error TS1109: Expression expected.
+tests/stress/stress-test.ts(724,13): error TS1109: Expression expected.
+tests/stress/stress-test.ts(727,13): error TS1109: Expression expected.
+tests/stress/stress-test.ts(730,13): error TS1109: Expression expected.
+tests/stress/stress-test.ts(733,13): error TS1109: Expression expected.
+tests/stress/stress-test.ts(736,13): error TS1109: Expression expected.
+tests/stress/stress-test.ts(750,8): error TS1005: ',' expected.
+tests/stress/stress-test.ts(753,1): error TS1109: Expression expected.
+tests/stress/stress-test.ts(778,64): error TS1005: ',' expected.
+tests/stress/stress-test.ts(780,56): error TS1005: ',' expected.
+tests/stress/stress-test.ts(782,64): error TS1005: ',' expected.
+tests/stress/stress-test.ts(784,77): error TS1005: ',' expected.
+tests/stress/stress-test.ts(787,21): error TS1005: ',' expected.
+tests/stress/stress-test.ts(787,40): error TS1003: Identifier expected.
+tests/stress/stress-test.ts(787,42): error TS1138: Parameter declaration expected.
+tests/stress/stress-test.ts(787,44): error TS1003: Identifier expected.
+tests/stress/stress-test.ts(787,47): error TS1005: '{' expected.
+tests/stress/stress-test.ts(790,54): error TS1136: Property assignment expected.
+tests/stress/stress-test.ts(1026,1): error TS1005: '}' expected.

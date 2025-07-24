@@ -1,0 +1,604 @@
+// Pharmacy Management System Schema
+// This schema defines the comprehensive pharmacy management system
+
+// Medication - Medication catalog
+model Medication {
+  id                   String                @id @default(uuid())
+  drugCode             String                @unique // NDC or other drug code
+  drugName             String
+  brandName            String?
+  genericName          String
+  manufacturer         String?
+  description          String?
+  dosageForm           String                // Tablet, Capsule, Liquid, etc.
+  strength             String
+  strengthUnit         String                // mg, ml, etc.
+  route                String                // Oral, IV, IM, etc.
+  therapeuticClass     String?
+  pharmacologicClass   String?
+  controlled           Boolean               @default(false)
+  controlledSubstanceClass String?           // Schedule II, III, IV, V
+  prescriptionRequired Boolean               @default(true)
+  otcStatus            Boolean               @default(false) // Over-the-counter
+  specialHandling      Boolean               @default(false)
+  refrigerated         Boolean               @default(false)
+  dangerousDrug        Boolean               @default(false)
+  hazardousSubstance   Boolean               @default(false)
+  storageCriteria      String?
+  allergyClass         String?
+  packageSize          String?
+  defaultDispenseQty   Int?
+  defaultDuration      Int?                  // Default duration in days
+  status               String                @default("Active") // Active, Inactive, Discontinued
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  interactions         DrugInteraction[]     @relation("PrimaryDrug")
+  interactsWith        DrugInteraction[]     @relation("SecondaryDrug")
+  inventory            MedicationInventory[]
+  dispenseItems        MedicationDispenseItem[]
+  
+  @@index([drugCode])
+  @@index([drugName])
+  @@index([genericName])
+  @@index([therapeuticClass])
+  @@index([controlled])
+  @@index([status])
+}
+
+// DrugInteraction - Drug-drug interactions
+model DrugInteraction {
+  id                   String                @id @default(uuid())
+  primaryDrugId        String
+  primaryDrug          Medication            @relation("PrimaryDrug", fields: [primaryDrugId], references: [id])
+  secondaryDrugId      String
+  secondaryDrug        Medication            @relation("SecondaryDrug", fields: [secondaryDrugId], references: [id])
+  severityLevel        String                // Contraindicated, Severe, Moderate, Mild
+  interactionEffect    String
+  clinicalManagement   String?
+  evidenceLevel        String?               // Evidence quality/level
+  interactionType      String?               // Pharmacokinetic, Pharmacodynamic, etc.
+  onsetTime            String?               // Rapid, Delayed, etc.
+  source               String?               // Source of interaction data
+  status               String                @default("Active") // Active, Inactive, Under Review
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@unique([primaryDrugId, secondaryDrugId])
+  @@index([primaryDrugId])
+  @@index([secondaryDrugId])
+  @@index([severityLevel])
+}
+
+// DrugAllergy - Drug allergy reference data
+model DrugAllergy {
+  id                   String                @id @default(uuid())
+  allergenCode         String                @unique
+  allergenName         String
+  allergenType         String                // Drug, Drug Class, Excipient
+  description          String?
+  crossSensitivities   String[]
+  commonReactions      String[]
+  status               String                @default("Active") // Active, Inactive
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([allergenCode])
+  @@index([allergenName])
+  @@index([allergenType])
+  @@index([status])
+}
+
+// MedicationInventory - Pharmacy inventory
+model MedicationInventory {
+  id                   String                @id @default(uuid())
+  medicationId         String
+  medication           Medication            @relation(fields: [medicationId], references: [id])
+  locationId           String                // Pharmacy, Dispensary, Ward, etc.
+  currentStock         Int
+  minimumStock         Int
+  reorderLevel         Int
+  maximumStock         Int?
+  unitCost             Decimal?              @db.Decimal(10, 2)
+  unitPrice            Decimal?              @db.Decimal(10, 2)
+  expiryDate           DateTime?
+  batchNumber          String?
+  lotNumber            String?
+  receivedDate         DateTime?
+  status               String                @default("Available") // Available, Low Stock, Out of Stock
+  lastCountDate        DateTime?
+  lastCountBy          String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([medicationId])
+  @@index([locationId])
+  @@index([status])
+  @@index([expiryDate])
+}
+
+// Prescription - Medication prescriptions
+model Prescription {
+  id                   String                @id @default(uuid())
+  prescriptionNumber   String                @unique
+  patientId            String
+  encounterId          String?
+  prescriberType       String                // Physician, NP, PA, etc.
+  prescriberId         String
+  prescriberName       String
+  prescriberContact    String?
+  prescriberDEA        String?               // DEA number for controlled substances
+  prescriberNPI        String?               // NPI number
+  issueDate            DateTime
+  status               String                // Draft, Active, Completed, Cancelled, Suspended
+  sendToPharmacy       Boolean               @default(true)
+  pharmacyId           String?
+  externalRx           Boolean               @default(false) // For outside pharmacy
+  isRenewal            Boolean               @default(false)
+  originalPrescriptionId String?             // If this is a renewal
+  renewals             Int                   @default(0) // Number of renewals allowed
+  renewalsUsed         Int                   @default(0) // Number of renewals used
+  signatureRequired    Boolean               @default(false)
+  signedAt             DateTime?
+  signedBy             String?
+  digitallySigned      Boolean               @default(false)
+  signature            String?               // URL to signature image
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  items                PrescriptionItem[]
+  dispenses            MedicationDispense[]
+  
+  @@index([prescriptionNumber])
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([prescriberId])
+  @@index([issueDate])
+  @@index([status])
+}
+
+// PrescriptionItem - Individual medications in a prescription
+model PrescriptionItem {
+  id                   String                @id @default(uuid())
+  prescriptionId       String
+  prescription         Prescription          @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicationName       String
+  medicationCode       String?
+  dosage               String
+  route                String
+  frequency            String
+  duration             Int?                  // Duration in days
+  quantity             Decimal               @db.Decimal(10, 3)
+  quantityUnit         String                // Tablets, ml, etc.
+  daysSupply           Int?
+  startDate            DateTime?
+  endDate              DateTime?
+  instructions         String?
+  refills              Int                   @default(0)
+  refillsUsed          Int                   @default(0)
+  genericSubstitution  Boolean               @default(true)
+  prn                  Boolean               @default(false) // As needed
+  prnReason            String?
+  dispenseAsWritten    Boolean               @default(false)
+  status               String                // Active, Discontinued, Completed
+  discontinueReason    String?
+  discontinuedBy       String?
+  discontinuedDate     DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  dispenseItems        MedicationDispenseItem[]
+  
+  @@index([prescriptionId])
+  @@index([medicationName])
+  @@index([medicationCode])
+  @@index([status])
+}
+
+// MedicationDispense - Dispensing records
+model MedicationDispense {
+  id                   String                @id @default(uuid())
+  dispenseNumber       String                @unique
+  prescriptionId       String?
+  prescription         Prescription?         @relation(fields: [prescriptionId], references: [id])
+  patientId            String
+  pharmacyId           String
+  dispensedBy          String
+  dispensedByName      String
+  verifiedBy           String?
+  verifiedByName       String?
+  dispenseDate         DateTime
+  status               String                // Pending, Dispensed, Returned, Cancelled
+  dispenseType         String                // Outpatient, Inpatient, Discharge, Emergency
+  paymentStatus        String?               // Pending, Paid, Insurance, Waived
+  copayAmount          Decimal?              @db.Decimal(10, 2)
+  totalAmount          Decimal?              @db.Decimal(10, 2)
+  insuranceId          String?
+  insuranceBilled      Boolean               @default(false)
+  insuranceClaimNumber String?
+  patientInstructions  String?
+  patientCounseled     Boolean               @default(false)
+  counseledBy          String?
+  counseledDate        DateTime?
+  pickedUp             Boolean               @default(false)
+  pickedUpBy           String?
+  pickedUpRelationship String?
+  pickedUpDate         DateTime?
+  pickedUpIdVerified   Boolean               @default(false)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  items                MedicationDispenseItem[]
+  
+  @@index([dispenseNumber])
+  @@index([prescriptionId])
+  @@index([patientId])
+  @@index([pharmacyId])
+  @@index([dispenseDate])
+  @@index([status])
+  @@index([dispenseType])
+}
+
+// MedicationDispenseItem - Individual medications in a dispense
+model MedicationDispenseItem {
+  id                   String                @id @default(uuid())
+  dispenseId           String
+  dispense             MedicationDispense    @relation(fields: [dispenseId], references: [id], onDelete: Cascade)
+  prescriptionItemId   String?
+  prescriptionItem     PrescriptionItem?     @relation(fields: [prescriptionItemId], references: [id])
+  medicationId         String
+  medication           Medication            @relation(fields: [medicationId], references: [id])
+  medicationName       String
+  dosage               String
+  route                String
+  frequency            String
+  instructions         String?
+  quantity             Decimal               @db.Decimal(10, 3)
+  quantityUnit         String
+  daysSupply           Int?
+  expiryDate           DateTime?
+  lotNumber            String?
+  batchNumber          String?
+  manufacturerName     String?
+  ndc                  String?               // National Drug Code
+  unitPrice            Decimal?              @db.Decimal(10, 2)
+  totalPrice           Decimal?              @db.Decimal(10, 2)
+  status               String                // Dispensed, Returned, Wasted
+  compounded           Boolean               @default(false)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([dispenseId])
+  @@index([prescriptionItemId])
+  @@index([medicationId])
+  @@index([medicationName])
+  @@index([status])
+}
+
+// MedicationAdministration - Administration records (MAR)
+model MedicationAdministration {
+  id                   String                @id @default(uuid())
+  patientId            String
+  encounterId          String?
+  prescriptionId       String?
+  medicationName       String
+  medicationCode       String?
+  dosage               String
+  route                String
+  administeredBy       String
+  administeredByName   String
+  administrationDateTime DateTime
+  scheduledDateTime    DateTime?
+  status               String                // Administered, Not Administered, Delayed, Refused, Held
+  reason               String?               // Reason for non-administration
+  site                 String?               // Administration site
+  witnessingNurse      String?
+  witnessingNurseName  String?
+  patientResponse      String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([prescriptionId])
+  @@index([medicationName])
+  @@index([administrationDateTime])
+  @@index([scheduledDateTime])
+  @@index([status])
+}
+
+// MedicationReconciliation - Medication reconciliation
+model MedicationReconciliation {
+  id                   String                @id @default(uuid())
+  patientId            String
+  encounterId          String?
+  reconciliationType   String                // Admission, Discharge, Transfer, Outpatient
+  reconciliationDate   DateTime
+  performedBy          String
+  performedByName      String
+  verifiedBy           String?
+  verifiedByName       String?
+  verifiedDate         DateTime?
+  status               String                // In Progress, Completed, Verified
+  sourceOfTruth        String?               // Patient, Caregiver, Prescription Bottles, etc.
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  entries              MedicationReconciliationEntry[]
+  
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([reconciliationType])
+  @@index([reconciliationDate])
+  @@index([status])
+}
+
+// MedicationReconciliationEntry - Individual entries in reconciliation
+model MedicationReconciliationEntry {
+  id                   String                @id @default(uuid())
+  reconciliationId     String
+  reconciliation       MedicationReconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  medicationName       String
+  medicationCode       String?
+  dosage               String?
+  route                String?
+  frequency            String?
+  source               String                // Home Med, Hospital Med, New Med
+  status               String                // Continue, Discontinue, Change, New
+  reason               String?
+  homeActionVerified   Boolean               @default(false)
+  verifiedBy           String?
+  verifiedDate         DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([reconciliationId])
+  @@index([medicationName])
+  @@index([source])
+  @@index([status])
+}
+
+// PharmacyInventoryTransaction - Inventory transactions
+model PharmacyInventoryTransaction {
+  id                   String                @id @default(uuid())
+  transactionId        String                @unique
+  transactionType      String                // Purchase, Dispensing, Return, Transfer, Adjustment, Waste
+  medicationName       String
+  medicationCode       String?
+  locationId           String
+  quantity             Decimal               @db.Decimal(10, 3)
+  quantityUnit         String
+  batchNumber          String?
+  lotNumber            String?
+  expiryDate           DateTime?
+  transactionDate      DateTime
+  performedBy          String
+  performedByName      String
+  documentNumber       String?               // PO number, Invoice number, etc.
+  previousStock        Int?
+  currentStock         Int?
+  unitCost             Decimal?              @db.Decimal(10, 2)
+  totalCost            Decimal?              @db.Decimal(10, 2)
+  reason               String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([transactionId])
+  @@index([transactionType])
+  @@index([medicationName])
+  @@index([medicationCode])
+  @@index([locationId])
+  @@index([transactionDate])
+}
+
+// MedicationOrder - Medication orders (inpatient)
+model MedicationOrder {
+  id                   String                @id @default(uuid())
+  orderNumber          String                @unique
+  patientId            String
+  encounterId          String
+  orderingProviderId   String
+  orderingProviderName String
+  orderDateTime        DateTime
+  startDateTime        DateTime
+  endDateTime          DateTime?
+  status               String                // Active, Completed, Discontinued, Suspended
+  priority             String                // Routine, STAT, ASAP
+  orderType            String                // Inpatient, PRN, One-Time, Continuous
+  orderMode            String                // Verbal, Written, Electronic
+  orderEnteredBy       String
+  verifiedBy           String?
+  verifiedDateTime     DateTime?
+  discontinuedBy       String?
+  discontinuedDateTime DateTime?
+  discontinueReason    String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  items                MedicationOrderItem[]
+  
+  @@index([orderNumber])
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([orderingProviderId])
+  @@index([orderDateTime])
+  @@index([status])
+  @@index([priority])
+  @@index([orderType])
+}
+
+// MedicationOrderItem - Individual medications in an order
+model MedicationOrderItem {
+  id                   String                @id @default(uuid())
+  orderId              String
+  order                MedicationOrder       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  medicationName       String
+  medicationCode       String?
+  dosage               String
+  route                String
+  frequency            String
+  prn                  Boolean               @default(false)
+  prnReason            String?
+  startDateTime        DateTime
+  endDateTime          DateTime?
+  instructions         String?
+  status               String                // Active, Completed, Discontinued, On Hold
+  priority             String                // Routine, STAT, ASAP
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([orderId])
+  @@index([medicationName])
+  @@index([medicationCode])
+  @@index([status])
+  @@index([priority])
+}
+
+// Pharmacy - Pharmacy locations
+model Pharmacy {
+  id                   String                @id @default(uuid())
+  pharmacyId           String                @unique
+  name                 String
+  description          String?
+  type                 String                // Inpatient, Outpatient, Retail, Specialty
+  address              String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  country              String?
+  phone                String?
+  fax                  String?
+  email                String?
+  licenseNumber        String?
+  dea                  String?               // DEA number
+  npi                  String?               // NPI number
+  operatingHours       String?               // JSON structure with operating hours
+  status               String                @default("Active") // Active, Inactive, Closed
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([pharmacyId])
+  @@index([type])
+  @@index([status])
+}
+
+// PharmacySupplier - Medication suppliers/vendors
+model PharmacySupplier {
+  id                   String                @id @default(uuid())
+  supplierId           String                @unique
+  name                 String
+  contactPerson        String?
+  address              String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  country              String?
+  phone                String?
+  email                String?
+  website              String?
+  accountNumber        String?
+  paymentTerms         String?
+  leadTime             Int?                  // Lead time in days
+  minimumOrderValue    Decimal?              @db.Decimal(10, 2)
+  status               String                @default("Active") // Active, Inactive
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([supplierId])
+  @@index([name])
+  @@index([status])
+}
+
+// PharmacyPurchaseOrder - Purchase orders
+model PharmacyPurchaseOrder {
+  id                   String                @id @default(uuid())
+  poNumber             String                @unique
+  supplierId           String
+  supplierName         String
+  orderDate            DateTime
+  expectedDeliveryDate DateTime?
+  status               String                // Draft, Submitted, Partially Received, Fully Received, Cancelled
+  totalAmount          Decimal               @db.Decimal(10, 2)
+  paymentStatus        String                // Pending, Paid, Partial
+  paymentDueDate       DateTime?
+  approvedBy           String?
+  approvedDate         DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  items                PharmacyPurchaseOrderItem[]
+  
+  @@index([poNumber])
+  @@index([supplierId])
+  @@index([orderDate])
+  @@index([status])
+}
+
+// PharmacyPurchaseOrderItem - Items in a purchase order
+model PharmacyPurchaseOrderItem {
+  id                   String                @id @default(uuid())
+  poId                 String
+  purchaseOrder        PharmacyPurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  medicationName       String
+  medicationCode       String?
+  quantity             Int
+  receivedQuantity     Int                   @default(0)
+  unitPrice            Decimal               @db.Decimal(10, 2)
+  totalPrice           Decimal               @db.Decimal(10, 2)
+  status               String                // Pending, Partially Received, Fully Received, Cancelled
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([poId])
+  @@index([medicationName])
+  @@index([medicationCode])
+  @@index([status])
+}
+
+// PharmacyAuditLog - Audit trail for pharmacy activities
+model PharmacyAuditLog {
+  id                   String                @id @default(uuid())
+  actionType           String                // Create, Update, Delete, View, Print, Dispense, etc.
+  resourceType         String                // Prescription, Dispense, Inventory, Order, etc.
+  resourceId           String
+  patientId            String?
+  performedBy          String
+  performerRole        String
+  actionDateTime       DateTime              @default(now())
+  details              String?
+  ipAddress            String?
+  userAgent            String?
+  createdAt            DateTime              @default(now())
+  
+  @@index([actionType])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([patientId])
+  @@index([performedBy])
+  @@index([actionDateTime])
+}

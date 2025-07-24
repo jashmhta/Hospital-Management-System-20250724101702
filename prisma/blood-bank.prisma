@@ -1,0 +1,374 @@
+// Blood Bank Management Schema
+// This schema extends the Hospital Management System with blood bank management functionality
+
+// Blood Donor model
+model BloodDonor {
+  id               String          @id @default(uuid())
+  donorId          String          @unique // External donor ID/registration number
+  firstName        String
+  lastName         String
+  dateOfBirth      DateTime
+  gender           String
+  bloodType        String // A+, A-, B+, B-, AB+, AB-, O+, O-
+  rhFactor         String // Positive, Negative
+  phone            String
+  email            String?
+  address          String?
+  registrationDate DateTime        @default(now())
+  lastDonationDate DateTime?
+  medicalHistory   String?
+  allergies        String?
+  eligibilityStatus String // Eligible, Temporary Deferral, Permanent Deferral
+  deferralReason   String?
+  deferralUntil    DateTime?
+  active           Boolean         @default(true)
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  
+  // Relations
+  donations        BloodDonation[]
+  screeningResults DonorScreening[]
+
+  @@index([bloodType])
+  @@index([eligibilityStatus])
+  @@index([lastDonationDate])
+  @@index([active])
+}
+
+// Blood Donation model
+model BloodDonation {
+  id                String          @id @default(uuid())
+  donationNumber    String          @unique
+  donorId           String
+  donor             BloodDonor      @relation(fields: [donorId], references: [id])
+  donationDate      DateTime
+  donationType      String          // Whole Blood, Platelets, Plasma, Double Red Cells
+  volume            Float           // In milliliters
+  hbLevel           Float?          // Hemoglobin level
+  bpSystolic        Int?            // Blood pressure - systolic
+  bpDiastolic       Int?            // Blood pressure - diastolic
+  pulse             Int?            // Heart rate
+  temperature       Float?          // Body temperature
+  weight            Float?          // Donor weight
+  donationSiteId    String
+  donationSite      DonationSite    @relation(fields: [donationSiteId], references: [id])
+  collectedBy       String          // Staff ID who collected the donation
+  status            String          // In Process, Completed, Discarded
+  discardReason     String?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  // Relations
+  bloodBags         BloodBag[]
+  adverseReactions  AdverseReaction[]
+
+  @@index([donorId])
+  @@index([donationDate])
+  @@index([donationType])
+  @@index([status])
+}
+
+// Blood Bag model
+model BloodBag {
+  id                String          @id @default(uuid())
+  bagNumber         String          @unique
+  donationId        String
+  donation          BloodDonation   @relation(fields: [donationId], references: [id])
+  bloodType         String
+  rhFactor          String
+  volume            Float           // In milliliters
+  extractionDate    DateTime
+  expirationDate    DateTime
+  componentType     String          // Whole Blood, Red Blood Cells, Plasma, Platelets, Cryoprecipitate
+  status            String          // Available, Reserved, Cross-matched, Issued, Discarded, Quarantined
+  location          String          // Storage location identifier
+  temperature       Float?          // Storage temperature
+  testResults       Json?           // JSON containing test results
+  processingMethod  String?         // Method used for component preparation
+  processingDate    DateTime?
+  processedBy       String?         // Staff ID who processed the blood
+  discardReason     String?
+  discardedDate     DateTime?
+  discardedBy       String?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  // Relations
+  crossMatches      CrossMatch[]
+  bloodIssues       BloodIssue[]
+  transferLogs      BloodBagTransfer[]
+
+  @@index([bloodType])
+  @@index([componentType])
+  @@index([status])
+  @@index([expirationDate])
+  @@index([location])
+}
+
+// Donor Screening model
+model DonorScreening {
+  id                String          @id @default(uuid())
+  donorId           String
+  donor             BloodDonor      @relation(fields: [donorId], references: [id])
+  screeningDate     DateTime
+  hbLevel           Float?          // Hemoglobin level
+  bpSystolic        Int?            // Blood pressure - systolic
+  bpDiastolic       Int?            // Blood pressure - diastolic
+  pulse             Int?            // Heart rate
+  temperature       Float?          // Body temperature
+  weight            Float?          // Donor weight
+  travelHistory     String?
+  medicalHistory    String?
+  riskBehaviors     String?
+  eligibilityStatus String          // Eligible, Temporary Deferral, Permanent Deferral
+  deferralReason    String?
+  deferralUntil     DateTime?
+  conductedBy       String          // Staff ID who conducted the screening
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([donorId])
+  @@index([screeningDate])
+  @@index([eligibilityStatus])
+}
+
+// Blood Test model
+model BloodTest {
+  id                String          @id @default(uuid())
+  testNumber        String          @unique
+  bloodBagId        String?         // Optional, may test donor without bag
+  bloodType         String?
+  rhFactor          String?
+  testDate          DateTime
+  testType          String          // ABO typing, Rh typing, Infectious disease, etc.
+  testParameters    Json            // JSON containing test parameters and results
+  testedBy          String          // Staff ID who performed the test
+  result            String          // Reactive, Non-reactive, Indeterminate
+  status            String          // Pending, Completed, Failed
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([testDate])
+  @@index([testType])
+  @@index([result])
+  @@index([status])
+}
+
+// Blood Recipient model
+model BloodRecipient {
+  id                String          @id @default(uuid())
+  patientId         String          // Reference to Patient model
+  bloodType         String
+  rhFactor          String
+  diagnosisCode     String?
+  diagnosis         String?
+  hospitalId        String?         // For external hospital requests
+  hospitalName      String?
+  requestingDoctor  String          // Doctor's name
+  requestingUnit    String          // Hospital unit/department
+  specialNotes      String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  // Relations
+  bloodRequests     BloodRequest[]
+
+  @@index([patientId])
+  @@index([bloodType])
+}
+
+// Blood Request model
+model BloodRequest {
+  id                String          @id @default(uuid())
+  requestNumber     String          @unique
+  recipientId       String
+  recipient         BloodRecipient  @relation(fields: [recipientId], references: [id])
+  requestDate       DateTime
+  requiredDate      DateTime
+  bloodType         String
+  rhFactor          String
+  componentType     String          // Whole Blood, Red Blood Cells, Plasma, Platelets, Cryoprecipitate
+  quantity          Int             // Number of units
+  priority          String          // Routine, Urgent, Emergency
+  clinicalIndication String
+  requestedBy       String          // Staff ID who requested the blood
+  status            String          // Pending, Processing, Fulfilled, Partially Fulfilled, Cancelled
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  // Relations
+  crossMatches      CrossMatch[]
+  bloodIssues       BloodIssue[]
+
+  @@index([recipientId])
+  @@index([requestDate])
+  @@index([requiredDate])
+  @@index([bloodType])
+  @@index([componentType])
+  @@index([priority])
+  @@index([status])
+}
+
+// Cross Match model
+model CrossMatch {
+  id                String          @id @default(uuid())
+  crossMatchNumber  String          @unique
+  requestId         String
+  request           BloodRequest    @relation(fields: [requestId], references: [id])
+  bloodBagId        String
+  bloodBag          BloodBag        @relation(fields: [bloodBagId], references: [id])
+  crossMatchDate    DateTime
+  result            String          // Compatible, Incompatible
+  methodology       String          // Immediate spin, Tube, Gel, etc.
+  performedBy       String          // Staff ID who performed the cross match
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([requestId])
+  @@index([bloodBagId])
+  @@index([crossMatchDate])
+  @@index([result])
+}
+
+// Blood Issue model
+model BloodIssue {
+  id                String          @id @default(uuid())
+  issueNumber       String          @unique
+  requestId         String
+  request           BloodRequest    @relation(fields: [requestId], references: [id])
+  bloodBagId        String
+  bloodBag          BloodBag        @relation(fields: [bloodBagId], references: [id])
+  issueDate         DateTime
+  issuedBy          String          // Staff ID who issued the blood
+  receivedBy        String          // Staff ID who received the blood
+  status            String          // Issued, Returned, Transfused, Wasted
+  returnDate        DateTime?
+  returnReason      String?
+  transfusionStartDate DateTime?
+  transfusionEndDate DateTime?
+  transfusionReaction Boolean       @default(false)
+  reactionDetails   String?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([requestId])
+  @@index([bloodBagId])
+  @@index([issueDate])
+  @@index([status])
+}
+
+// Adverse Reaction model
+model AdverseReaction {
+  id                String          @id @default(uuid())
+  donationId        String
+  donation          BloodDonation   @relation(fields: [donationId], references: [id])
+  reactionDate      DateTime
+  reactionType      String          // Vasovagal, Hematoma, Nerve injury, etc.
+  severity          String          // Mild, Moderate, Severe
+  symptoms          String
+  treatmentProvided String?
+  followUpRequired  Boolean         @default(false)
+  followUpDate      DateTime?
+  reportedBy        String          // Staff ID who reported the reaction
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([donationId])
+  @@index([reactionDate])
+  @@index([reactionType])
+  @@index([severity])
+}
+
+// Blood Bag Transfer model
+model BloodBagTransfer {
+  id                String          @id @default(uuid())
+  bloodBagId        String
+  bloodBag          BloodBag        @relation(fields: [bloodBagId], references: [id])
+  transferDate      DateTime
+  fromLocation      String
+  toLocation        String
+  transferredBy     String          // Staff ID who transferred the blood
+  reason            String?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([bloodBagId])
+  @@index([transferDate])
+  @@index([fromLocation])
+  @@index([toLocation])
+}
+
+// Donation Site model
+model DonationSite {
+  id                String          @id @default(uuid())
+  name              String
+  siteCode          String          @unique
+  siteType          String          // Fixed, Mobile, Camp
+  address           String?
+  phone             String?
+  email             String?
+  contactPerson     String?
+  active            Boolean         @default(true)
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  // Relations
+  donations         BloodDonation[]
+
+  @@index([siteType])
+  @@index([active])
+}
+
+// Blood Inventory Summary model
+model BloodInventorySummary {
+  id                String          @id @default(uuid())
+  bloodType         String
+  rhFactor          String
+  componentType     String
+  availableUnits    Int
+  reservedUnits     Int
+  totalUnits        Int
+  minimumRequired   Int
+  lastUpdated       DateTime
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([bloodType, rhFactor, componentType])
+  @@index([bloodType])
+  @@index([componentType])
+}
+
+// Campaign model for blood donation drives
+model BloodDonationCampaign {
+  id                String          @id @default(uuid())
+  name              String
+  campaignCode      String          @unique
+  description       String?
+  startDate         DateTime
+  endDate           DateTime
+  location          String
+  targetDonors      Int?
+  actualDonors      Int?
+  organizer         String
+  contactPhone      String?
+  contactEmail      String?
+  status            String          // Planned, Active, Completed, Cancelled
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([startDate])
+  @@index([endDate])
+  @@index([status])
+}

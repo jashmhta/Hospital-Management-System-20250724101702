@@ -1,0 +1,8 @@
+{
+	"expo": {
+		"name": "HMS Doctor Portal",
+		"slug": "hms-doctor-app",
+		"version": "1.0.0",
+		"orientation": "portrait"
+	}
+}

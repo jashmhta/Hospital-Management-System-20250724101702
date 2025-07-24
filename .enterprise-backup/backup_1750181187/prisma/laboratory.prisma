@@ -1,0 +1,632 @@
+// Laboratory Information System (LIS) Schema
+// This schema defines the comprehensive laboratory management system
+
+// LabTest - Laboratory test catalog
+model LabTest {
+  id                   String                @id @default(uuid())
+  testCode             String                @unique // Unique test identifier
+  testName             String
+  shortName            String?
+  description          String?
+  testCategory         String                // Chemistry, Hematology, Microbiology, etc.
+  testType             String                // Panel, Individual, Reflex, POC
+  sampleTypes          String[]              // Blood, Urine, CSF, etc.
+  containerTypes       String[]              // Tube types, collection containers
+  defaultPriority      String                @default("Routine") // Routine, STAT, ASAP, Timed
+  defaultDepartment    String?
+  methodUsed           String?
+  equipmentUsed        String?
+  loinc                String?               // LOINC code
+  cptCode              String?               // CPT billing code
+  price                Decimal?              @db.Decimal(10, 2)
+  requiresConsent      Boolean               @default(false)
+  processTime          Int?                  // Processing time in minutes
+  turnaroundTime       Int?                  // Expected turnaround time in minutes
+  specialInstructions  String?
+  patientPreparation   String?
+  samplePreservation   String?
+  status               String                @default("Active") // Active, Inactive, Deprecated
+  isVisible            Boolean               @default(true)
+  referralTest         Boolean               @default(false)     // Is this test sent to reference lab
+  referralLabId        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  testParameters       LabTestParameter[]
+  testProfiles         LabTestProfileItem[]
+  orders               LabOrderItem[]
+  sampleRequirements   LabSampleRequirement[]
+  
+  @@index([testCode])
+  @@index([testCategory])
+  @@index([testType])
+  @@index([status])
+  @@index([loinc])
+}
+
+// LabTestParameter - Individual parameters within a test
+model LabTestParameter {
+  id                   String                @id @default(uuid())
+  testId               String
+  test                 LabTest               @relation(fields: [testId], references: [id], onDelete: Cascade)
+  parameterCode        String
+  parameterName        String
+  units                String?
+  decimalPlaces        Int                   @default(2)
+  reportable           Boolean               @default(true)
+  criticalResultsEnabled Boolean             @default(false)
+  calculationFormula   String?               // Formula for calculated parameters
+  displayOrder         Int                   @default(0)
+  loincCode            String?               // LOINC code for individual parameter
+  status               String                @default("Active") // Active, Inactive
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  referenceRanges      LabReferenceRange[]
+  criticalRanges       LabCriticalRange[]
+  results              LabResult[]
+  
+  @@unique([testId, parameterCode])
+  @@index([testId])
+  @@index([parameterCode])
+  @@index([status])
+}
+
+// LabReferenceRange - Normal ranges for test parameters
+model LabReferenceRange {
+  id                   String                @id @default(uuid())
+  parameterId          String
+  parameter            LabTestParameter      @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+  gender               String?               // Male, Female, All
+  minAge               Int?                  // Minimum age in days
+  maxAge               Int?                  // Maximum age in days
+  pregnancy            Boolean?              // Specific to pregnancy
+  ethnicity            String?
+  lowerLimit           String?               // Lower limit of normal range
+  upperLimit           String?               // Upper limit of normal range
+  textualRange         String?               // For qualitative/text results
+  unitOfMeasure        String?
+  effectiveDate        DateTime              @default(now())
+  expirationDate       DateTime?
+  source               String?               // Source of reference range
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([parameterId])
+}
+
+// LabCriticalRange - Critical/panic values for test parameters
+model LabCriticalRange {
+  id                   String                @id @default(uuid())
+  parameterId          String
+  parameter            LabTestParameter      @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+  gender               String?               // Male, Female, All
+  minAge               Int?                  // Minimum age in days
+  maxAge               Int?                  // Maximum age in days
+  pregnancy            Boolean?              // Specific to pregnancy
+  lowerCritical        String?               // Lower critical value
+  upperCritical        String?               // Upper critical value
+  textualValue         String?               // For qualitative results
+  alertMessage         String?
+  notificationMethod   String                @default("Phone") // Phone, Email, SMS, System
+  requiresRepeat       Boolean               @default(false)
+  effectiveDate        DateTime              @default(now())
+  expirationDate       DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([parameterId])
+}
+
+// LabTestProfile - Grouping of related tests (panels)
+model LabTestProfile {
+  id                   String                @id @default(uuid())
+  profileCode          String                @unique
+  profileName          String
+  description          String?
+  category             String
+  sampleTypes          String[]
+  defaultPriority      String                @default("Routine")
+  price                Decimal?              @db.Decimal(10, 2)
+  status               String                @default("Active") // Active, Inactive
+  specialInstructions  String?
+  cptCode              String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  testItems            LabTestProfileItem[]
+  orders               LabOrderItem[]
+  
+  @@index([profileCode])
+  @@index([category])
+  @@index([status])
+}
+
+// LabTestProfileItem - Tests included in a profile
+model LabTestProfileItem {
+  id                   String                @id @default(uuid())
+  profileId            String
+  profile              LabTestProfile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  testId               String
+  test                 LabTest               @relation(fields: [testId], references: [id])
+  displayOrder         Int                   @default(0)
+  isOptional           Boolean               @default(false)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@unique([profileId, testId])
+  @@index([profileId])
+  @@index([testId])
+}
+
+// LabSampleType - Types of laboratory samples
+model LabSampleType {
+  id                   String                @id @default(uuid())
+  sampleTypeCode       String                @unique
+  sampleTypeName       String
+  description          String?
+  color                String?               // Color code for identification
+  containerTypes       String[]              // Compatible container types
+  processingInstructions String?
+  storageTemperature   String?
+  maxStorageDuration   String?
+  aliquotAllowed       Boolean               @default(true)
+  status               String                @default("Active") // Active, Inactive
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  samples              LabSample[]
+  requirements         LabSampleRequirement[]
+  
+  @@index([sampleTypeCode])
+  @@index([status])
+}
+
+// LabSampleRequirement - Sample requirements for tests
+model LabSampleRequirement {
+  id                   String                @id @default(uuid())
+  testId               String
+  test                 LabTest               @relation(fields: [testId], references: [id], onDelete: Cascade)
+  sampleTypeId         String
+  sampleType           LabSampleType         @relation(fields: [sampleTypeId], references: [id])
+  minimumVolume        String?               // Minimum volume required
+  optimalVolume        String?               // Optimal volume
+  containerType        String?               // Specific container type
+  specialRequirements  String?
+  processingInstructions String?
+  storageInstructions  String?
+  stabilityTimeRoom    Int?                  // Stability time at room temp (hours)
+  stabilityTimeRefrigerated Int?             // Stability time refrigerated (hours)
+  stabilityTimeFrozen  Int?                  // Stability time frozen (hours)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([testId])
+  @@index([sampleTypeId])
+}
+
+// LabOrder - Laboratory orders
+model LabOrder {
+  id                   String                @id @default(uuid())
+  orderNumber          String                @unique
+  patientId            String
+  encounterId          String?
+  orderingProviderId   String
+  orderingProviderName String
+  orderDateTime        DateTime
+  priority             String                // Routine, STAT, ASAP, Timed
+  collectionType       String                // Lab Draw, Point of Care, Home Collection, etc.
+  clinicalInfo         String?
+  diagnosis            String?
+  diagnosisCode        String?
+  isFasting            Boolean               @default(false)
+  collectionDateTime   DateTime?
+  collectionSite       String?               // Left arm, Right arm, etc.
+  collectedBy          String?
+  specimenReceivedDateTime DateTime?
+  receivedBy           String?
+  status               String                // Ordered, Collected, In Process, Completed, Cancelled
+  departmentId         String?
+  locationId           String?
+  notes                String?
+  isRecurring          Boolean               @default(false)
+  recurringPattern     String?               // Daily, Weekly, etc.
+  lastPrintDateTime    DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  orderItems           LabOrderItem[]
+  samples              LabSample[]
+  results              LabResult[]
+  workItems            LabWorkItem[]
+  
+  @@index([orderNumber])
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([orderingProviderId])
+  @@index([orderDateTime])
+  @@index([priority])
+  @@index([status])
+}
+
+// LabOrderItem - Individual test items in an order
+model LabOrderItem {
+  id                   String                @id @default(uuid())
+  orderId              String
+  order                LabOrder              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  testId               String?
+  test                 LabTest?              @relation(fields: [testId], references: [id])
+  profileId            String?
+  profile              LabTestProfile?       @relation(fields: [profileId], references: [id])
+  status               String                // Ordered, Collected, In Process, Completed, Cancelled
+  priority             String
+  scheduledDateTime    DateTime?
+  processingDateTime   DateTime?
+  completedDateTime    DateTime?
+  cancelledDateTime    DateTime?
+  cancelReason         String?
+  performingLabId      String?
+  referralLabId        String?
+  referralLabNumber    String?
+  billable             Boolean               @default(true)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([orderId])
+  @@index([testId])
+  @@index([profileId])
+  @@index([status])
+}
+
+// LabSample - Laboratory samples/specimens
+model LabSample {
+  id                   String                @id @default(uuid())
+  sampleId             String                @unique
+  orderId              String
+  order                LabOrder              @relation(fields: [orderId], references: [id])
+  patientId            String
+  sampleTypeId         String
+  sampleType           LabSampleType         @relation(fields: [sampleTypeId], references: [id])
+  containerType        String
+  volume               String?
+  collectionDateTime   DateTime?
+  collectedBy          String?
+  collectionSite       String?
+  collectionMethod     String?
+  receivedDateTime     DateTime?
+  receivedBy           String?
+  receivedCondition    String?               // Good, Hemolyzed, Clotted, Insufficient, etc.
+  status               String                // Ordered, Collected, Received, In Process, Analyzed, Stored, Discarded
+  storageLocation      String?
+  parentSampleId       String?               // For aliquots
+  isAliquot            Boolean               @default(false)
+  processingNotes      String?
+  rejectionReason      String?
+  rejectedBy           String?
+  rejectionDateTime    DateTime?
+  discardedDateTime    DateTime?
+  discardedBy          String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  aliquots             LabSampleAliquot[]
+  results              LabResult[]
+  workItems            LabWorkItem[]
+  
+  @@index([sampleId])
+  @@index([orderId])
+  @@index([patientId])
+  @@index([sampleTypeId])
+  @@index([status])
+  @@index([collectionDateTime])
+  @@index([parentSampleId])
+}
+
+// LabSampleAliquot - Aliquots of original samples
+model LabSampleAliquot {
+  id                   String                @id @default(uuid())
+  aliquotId            String                @unique
+  sampleId             String
+  sample               LabSample             @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  aliquotNumber        Int
+  volume               String
+  createdBy            String
+  creationDateTime     DateTime
+  status               String                // Created, In Use, Stored, Discarded
+  storageLocation      String?
+  testUsage            String?
+  discardedDateTime    DateTime?
+  discardedBy          String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([aliquotId])
+  @@index([sampleId])
+  @@index([status])
+}
+
+// LabWorkItem - Laboratory workflow items
+model LabWorkItem {
+  id                   String                @id @default(uuid())
+  workItemId           String                @unique
+  orderId              String
+  order                LabOrder              @relation(fields: [orderId], references: [id])
+  sampleId             String?
+  sample               LabSample?            @relation(fields: [sampleId], references: [id])
+  workItemType         String                // Test Run, QC, Calibration
+  priority             String
+  assignedTo           String?
+  assignedDateTime     DateTime?
+  startedDateTime      DateTime?
+  completedDateTime    DateTime?
+  status               String                // Pending, In Progress, Completed, Failed, Cancelled
+  equipmentId          String?
+  runId                String?
+  batchId              String?
+  position             String?               // Position in rack/plate
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([workItemId])
+  @@index([orderId])
+  @@index([sampleId])
+  @@index([workItemType])
+  @@index([priority])
+  @@index([status])
+  @@index([equipmentId])
+  @@index([batchId])
+}
+
+// LabResult - Laboratory test results
+model LabResult {
+  id                   String                @id @default(uuid())
+  resultId             String                @unique
+  orderId              String
+  order                LabOrder              @relation(fields: [orderId], references: [id])
+  sampleId             String?
+  sample               LabSample?            @relation(fields: [sampleId], references: [id])
+  parameterId          String
+  parameter            LabTestParameter      @relation(fields: [parameterId], references: [id])
+  resultValue          String
+  resultValueNumeric   Decimal?              @db.Decimal(20, 10)
+  units                String?
+  referenceRange       String?
+  flags                String?               // H (High), L (Low), C (Critical), etc.
+  interpretation       String?
+  status               String                // Preliminary, Final, Corrected, Cancelled
+  performedBy          String
+  performedDateTime    DateTime
+  verifiedBy           String?
+  verifiedDateTime     DateTime?
+  reportedDateTime     DateTime?
+  correctedResultId    String?               // Reference to original result if corrected
+  correctionReason     String?
+  analyticalMethod     String?
+  equipmentId          String?
+  equipmentName        String?
+  batchId              String?
+  runId                String?
+  dilutionFactor       String?
+  notes                String?
+  isCritical           Boolean               @default(false)
+  criticalNotifiedTo   String?
+  criticalNotifiedDateTime DateTime?
+  criticalNotifiedBy   String?
+  criticalAcknowledgedBy String?
+  criticalAcknowledgedDateTime DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([resultId])
+  @@index([orderId])
+  @@index([sampleId])
+  @@index([parameterId])
+  @@index([status])
+  @@index([performedDateTime])
+  @@index([isCritical])
+}
+
+// LabEquipment - Laboratory equipment/analyzers
+model LabEquipment {
+  id                   String                @id @default(uuid())
+  equipmentId          String                @unique
+  equipmentName        String
+  manufacturer         String
+  model                String
+  serialNumber         String?
+  location             String?
+  departmentId         String?
+  equipmentType        String                // Analyzer, Centrifuge, Microscope, etc.
+  interfaceType        String?               // LIS Interface type
+  interfaceStatus      String?               // Active, Inactive, In Development
+  maintenanceSchedule  String?
+  lastMaintenanceDate  DateTime?
+  nextMaintenanceDate  DateTime?
+  calibrationSchedule  String?
+  lastCalibrationDate  DateTime?
+  nextCalibrationDate  DateTime?
+  status               String                // Active, Inactive, Maintenance, Retired
+  purchaseDate         DateTime?
+  warrantyExpiration   DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([equipmentId])
+  @@index([equipmentType])
+  @@index([status])
+  @@index([departmentId])
+}
+
+// LabReferralLab - External reference laboratories
+model LabReferralLab {
+  id                   String                @id @default(uuid())
+  referralLabId        String                @unique
+  labName              String
+  address              String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  country              String?
+  contactPerson        String?
+  phone                String?
+  email                String?
+  accountNumber        String?
+  interfaceType        String?               // HL7, API, Manual, etc.
+  transmissionMethod   String?               // Electronic, Fax, Courier
+  status               String                @default("Active") // Active, Inactive
+  turnaroundTime       Int?                  // Average turnaround time in hours
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([referralLabId])
+  @@index([status])
+}
+
+// LabQualityControl - QC data for lab equipment
+model LabQualityControl {
+  id                   String                @id @default(uuid())
+  qcId                 String                @unique
+  equipmentId          String
+  testId               String?
+  parameterId          String?
+  lotNumber            String
+  qcMaterial           String
+  qcLevel              String                // Low, Normal, High
+  targetValue          String?
+  lowerLimit           String?
+  upperLimit           String?
+  result               String
+  resultDateTime       DateTime
+  performedBy          String
+  status               String                // Pass, Fail, Warning
+  correctiveAction     String?
+  reviewedBy           String?
+  reviewedDateTime     DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([qcId])
+  @@index([equipmentId])
+  @@index([testId])
+  @@index([parameterId])
+  @@index([lotNumber])
+  @@index([resultDateTime])
+  @@index([status])
+}
+
+// LabReportTemplate - Templates for lab reports
+model LabReportTemplate {
+  id                   String                @id @default(uuid())
+  templateId           String                @unique
+  templateName         String
+  description          String?
+  reportType           String                // Individual, Cumulative, Summary, etc.
+  content              String                // Template content, may include placeholders
+  headerContent        String?
+  footerContent        String?
+  isDefault            Boolean               @default(false)
+  status               String                @default("Active") // Active, Inactive
+  createdBy            String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([templateId])
+  @@index([reportType])
+  @@index([status])
+}
+
+// LabInventoryItem - Laboratory supplies inventory
+model LabInventoryItem {
+  id                   String                @id @default(uuid())
+  itemId               String                @unique
+  itemName             String
+  description          String?
+  itemType             String                // Reagent, Control, Calibrator, Supply
+  manufacturer         String?
+  catalogNumber        String?
+  unitOfMeasure        String
+  currentStock         Int
+  minimumStock         Int
+  reorderLevel         Int
+  locationId           String?
+  storageConditions    String?
+  associatedTests      String[]
+  associatedEquipment  String[]
+  status               String                @default("Active") // Active, Discontinued, On Hold
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  lots                 LabInventoryLot[]
+  
+  @@index([itemId])
+  @@index([itemType])
+  @@index([status])
+}
+
+// LabInventoryLot - Lot-specific inventory information
+model LabInventoryLot {
+  id                   String                @id @default(uuid())
+  lotId                String                @unique
+  itemId               String
+  item                 LabInventoryItem      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lotNumber            String
+  expirationDate       DateTime
+  receivedDate         DateTime
+  receivedQuantity     Int
+  currentQuantity      Int
+  cost                 Decimal?              @db.Decimal(10, 2)
+  vendorId             String?
+  purchaseOrderNumber  String?
+  qualityControlStatus String                @default("Pending") // Passed, Failed, Pending
+  status               String                @default("Active") // Active, Depleted, Expired, Quarantined
+  openedDate           DateTime?
+  openedBy             String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([lotId])
+  @@index([itemId])
+  @@index([lotNumber])
+  @@index([expirationDate])
+  @@index([status])
+}
+
+// LabAuditLog - Audit trail for lab activities
+model LabAuditLog {
+  id                   String                @id @default(uuid())
+  actionType           String                // Create, Update, Delete, View, Print, etc.
+  resourceType         String                // Order, Result, Sample, etc.
+  resourceId           String
+  description          String
+  performedBy          String
+  performerRole        String
+  actionDateTime       DateTime              @default(now())
+  details              String?
+  ipAddress            String?
+  userAgent            String?
+  createdAt            DateTime              @default(now())
+  
+  @@index([actionType])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([performedBy])
+  @@index([actionDateTime])
+}

@@ -1,0 +1,216 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hms-blue-green
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "https://github.com/example/hms-k8s-manifests.git"
+    targetRevision: HEAD
+    path: overlays/blue-green
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: hms
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: hms-frontend
+  namespace: hms
+spec:
+  replicas: 5
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: hms-frontend
+  template:
+    metadata:
+      labels:
+        app: hms-frontend
+    spec:
+      containers:
+        - name: hms-frontend
+          image: hms-registry.example.com/hms-frontend:stable
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+  strategy:
+    blueGreen:
+      # Active service that points to the active ReplicaSet
+      activeService: hms-frontend-active
+      # Preview service that points to the preview ReplicaSet
+      previewService: hms-frontend-preview
+      # Auto-promotion configuration
+      autoPromotionEnabled: false
+      # Analysis to run after preview service promotion
+      postPromotionAnalysis:
+        templates:
+          - templateName: hms-frontend-analysis
+        args:
+          - name: service-name
+            value: hms-frontend-preview
+      # Analysis to run before auto-promotion
+      prePromotionAnalysis:
+        templates:
+          - templateName: hms-frontend-analysis
+        args:
+          - name: service-name
+            value: hms-frontend-preview
+      # Configuration for the preview service
+      previewReplicaCount: 1
+      # How many old ReplicaSets to keep
+      scaleDownDelaySeconds: 300
+      # Abort the release if the analysis fails
+      abortScaleDownDelaySeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hms-frontend-active
+  namespace: hms
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: hms-frontend
+    # Blue/Green selector controlled by Argo Rollouts
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hms-frontend-preview
+  namespace: hms
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: hms-frontend
+    # Blue/Green selector controlled by Argo Rollouts
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: hms-frontend-analysis
+  namespace: hms
+spec:
+  metrics:
+    - name: success-rate
+      interval: 30s
+      count: 5
+      # success criteria
+      successCondition: result[0] >= 0.95
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(rate(http_requests_total{service="{{args.service-name}}",status=~"2.."}[5m])) 
+            / 
+            sum(rate(http_requests_total{service="{{args.service-name}}"}[5m]))
+    - name: response-time
+      interval: 30s
+      count: 5
+      # success criteria
+      successCondition: result[0] <= 300
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            histogram_quantile(0.95, 
+              sum(rate(http_request_duration_ms_bucket{service="{{args.service-name}}"}[5m])) by (le)
+            )
+    - name: error-logs
+      interval: 30s
+      count: 5
+      successCondition: result[0] <= 5
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc.cluster.local:9090
+          query: |
+            sum(increase(log_messages_total{service="{{args.service-name}}",level="error"}[5m]))
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hms-frontend-ingress
+  namespace: hms
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - app.hms.health
+      secretName: hms-frontend-tls
+  rules:
+    - host: app.hms.health
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hms-frontend-active
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hms-frontend-preview-ingress
+  namespace: hms
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: preview-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Preview Environment - Authentication Required"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - preview.hms.health
+      secretName: hms-frontend-preview-tls
+  rules:
+    - host: preview.hms.health
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hms-frontend-preview
+                port:
+                  number: 80

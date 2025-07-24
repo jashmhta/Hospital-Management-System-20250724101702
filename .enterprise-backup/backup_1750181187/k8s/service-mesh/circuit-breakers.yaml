@@ -1,0 +1,107 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: hms-global-circuit-breaker
+  namespace: hms
+spec:
+  host: "*.hms.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 1000
+        maxRequestsPerConnection: 100
+        maxRetries: 3
+      tcp:
+        maxConnections: 100
+        connectTimeout: 5s
+        tcpKeepalive:
+          time: 60s
+          interval: 15s
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 5s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: hms-patient-service-circuit-breaker
+  namespace: hms
+spec:
+  host: patient-service.hms.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 200
+        http2MaxRequests: 2000
+        maxRequestsPerConnection: 100
+        maxRetries: 5
+      tcp:
+        maxConnections: 200
+        connectTimeout: 3s
+        tcpKeepalive:
+          time: 120s
+          interval: 30s
+    outlierDetection:
+      consecutiveErrors: 3
+      interval: 3s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 70
+      minHealthPercent: 40
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: hms-billing-service-circuit-breaker
+  namespace: hms
+spec:
+  host: billing-service.hms.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 150
+        http2MaxRequests: 1500
+        maxRequestsPerConnection: 100
+        maxRetries: 3
+      tcp:
+        maxConnections: 150
+        connectTimeout: 3s
+        tcpKeepalive:
+          time: 120s
+          interval: 30s
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 5s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 60
+      minHealthPercent: 50
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: hms-analytics-service-circuit-breaker
+  namespace: hms
+spec:
+  host: analytics-service.hms.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 1000
+        maxRequestsPerConnection: 100
+        maxRetries: 3
+      tcp:
+        maxConnections: 100
+        connectTimeout: 5s
+        tcpKeepalive:
+          time: 120s
+          interval: 30s
+    outlierDetection:
+      consecutiveErrors: 7
+      interval: 7s
+      baseEjectionTime: 90s
+      maxEjectionPercent: 50
+      minHealthPercent: 60

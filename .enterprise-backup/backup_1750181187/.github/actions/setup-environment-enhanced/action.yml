@@ -1,0 +1,161 @@
+name: "Setup Enterprise Environment"
+description: "Sets up comprehensive development environment for HMS Enterprise"
+
+inputs:
+  node-version:
+    description: "Node.js version to use"
+    required: false
+    default: "20.x"
+  java-version:
+    description: "Java version to use"
+    required: false
+    default: "21"
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.11"
+  enable-cache:
+    description: "Enable dependency caching"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: 🏗️ Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "npm"
+        registry-url: "https://registry.npmjs.org"
+
+    - name: ☕ Setup Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: "temurin"
+        cache: "maven"
+
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: "pip"
+
+    - name: 🔧 Install System Dependencies
+      shell: bash
+      run: |
+        # Update package lists
+        sudo apt-get update
+
+        # Install essential tools
+        sudo apt-get install -y \
+          curl \
+          jq \
+          git \
+          build-essential \
+          postgresql-client \
+          redis-tools \
+          docker-compose
+          
+        # Install security tools
+        sudo apt-get install -y \
+          trivy \
+          semgrep
+          
+        # Install k6 for performance testing
+        curl -s https://dl.k6.io/key.gpg | sudo apt-key add -
+        echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install -y k6
+
+    - name: 🛠️ Install Node.js Tools
+      shell: bash
+      run: |
+        npm install -g \
+          @typescript-eslint/parser \
+          @typescript-eslint/eslint-plugin \
+          prettier \
+          newman \
+          lighthouse \
+          axe-core \
+          typescript \
+          ts-node \
+          tsx
+
+    - name: 🔧 Install Python Security Tools
+      shell: bash
+      run: |
+        pip install \
+          bandit \
+          safety \
+          semgrep \
+          checkov \
+          opa-python \
+          dependency-check-py
+
+    - name: ⚡ Install Performance Tools
+      shell: bash
+      run: |
+        # Install Artillery for additional load testing
+        npm install -g artillery
+
+        # Install Lighthouse CI
+        npm install -g @lhci/cli
+
+    - name: 🔒 Install Security Scanners
+      shell: bash
+      run: |
+        # Install OWASP ZAP
+        docker pull owasp/zap2docker-stable
+
+        # Install Snyk CLI
+        npm install -g snyk
+
+        # Install GitHub's CodeQL CLI
+        curl -L https://github.com/github/codeql-action/releases/latest/download/codeql-linux64.tar.gz | tar xz
+        sudo mv codeql /usr/local/bin/
+
+    - name: 📦 Cache Dependencies
+      if: inputs.enable-cache == 'true'
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.npm
+          ~/.m2
+          ~/.cache/pip
+          ~/.cache/semgrep
+          ~/.trivy
+        key: hms-enterprise-deps-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/pom.xml', '**/requirements*.txt') }}
+        restore-keys: |
+          hms-enterprise-deps-${{ runner.os }}-
+
+    - name: 🔄 Verify Installation
+      shell: bash
+      run: |
+        echo "🔍 Verifying tool installations..."
+
+        # Verify Node.js ecosystem
+        node --version
+        npm --version
+        npx --version
+        tsc --version
+
+        # Verify Java ecosystem
+        java --version
+        mvn --version
+
+        # Verify Python ecosystem
+        python --version
+        pip --version
+
+        # Verify security tools
+        trivy --version
+        semgrep --version
+        snyk --version
+
+        # Verify performance tools
+        k6 version
+        lighthouse --version
+
+        echo "✅ All tools installed successfully!"

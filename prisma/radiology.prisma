@@ -1,0 +1,617 @@
+// Radiology Information System (RIS) Schema
+// This schema defines the comprehensive radiology management system
+
+// RadiologyProcedure - Catalog of radiology procedures
+model RadiologyProcedure {
+  id                   String                @id @default(uuid())
+  procedureCode        String                @unique
+  procedureName        String
+  shortName            String?
+  description          String?
+  modalityType         String                // X-Ray, CT, MRI, Ultrasound, PET, Nuclear Medicine, etc.
+  bodyPart             String
+  laterality           String?               // Left, Right, Bilateral, None
+  procedureType        String                // Diagnostic, Interventional, Screening
+  duration             Int                   // Estimated duration in minutes
+  preparationRequired  Boolean               @default(false)
+  preparationInstructions String?
+  cptCode              String?
+  price                Decimal?              @db.Decimal(10, 2)
+  contraindications    String?
+  radiationDose        String?
+  contrastRequired     Boolean               @default(false)
+  contrastType         String?
+  priority             String                @default("Routine") // Routine, STAT, Urgent
+  status               String                @default("Active") // Active, Inactive
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  orders               RadiologyOrder[]
+  
+  @@index([procedureCode])
+  @@index([modalityType])
+  @@index([bodyPart])
+  @@index([procedureType])
+  @@index([status])
+}
+
+// RadiologyModality - Equipment used for imaging
+model RadiologyModality {
+  id                   String                @id @default(uuid())
+  modalityId           String                @unique
+  modalityName         String
+  modalityType         String                // X-Ray, CT, MRI, Ultrasound, PET, etc.
+  manufacturer         String
+  model                String
+  serialNumber         String?
+  location             String
+  roomId               String?
+  aetitle              String?               // DICOM Application Entity Title
+  ipAddress            String?
+  port                 Int?
+  status               String                @default("Active") // Active, Inactive, Maintenance
+  calibrationDate      DateTime?
+  nextCalibrationDate  DateTime?
+  maintenanceSchedule  String?
+  purchaseDate         DateTime?
+  warrantyExpiration   DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  studies              RadiologyStudy[]
+  
+  @@index([modalityId])
+  @@index([modalityType])
+  @@index([location])
+  @@index([status])
+}
+
+// RadiologyOrder - Orders for radiology procedures
+model RadiologyOrder {
+  id                   String                @id @default(uuid())
+  orderNumber          String                @unique
+  patientId            String
+  procedureId          String
+  procedure            RadiologyProcedure    @relation(fields: [procedureId], references: [id])
+  encounterId          String?
+  orderingProviderId   String
+  orderingProviderName String
+  orderDateTime        DateTime
+  scheduledDateTime    DateTime?
+  priority             String                // Routine, STAT, Urgent, ASAP
+  status               String                // Ordered, Scheduled, In Progress, Completed, Cancelled
+  reasonForExam        String
+  clinicalInformation  String?
+  diagnosis            String?
+  diagnosisCode        String?
+  allergies            String?
+  transportRequired    Boolean               @default(false)
+  isolation            Boolean               @default(false)
+  isolationType        String?               // Contact, Droplet, Airborne
+  sedationRequired     Boolean               @default(false)
+  contrastRequired     Boolean               @default(false)
+  contrastType         String?
+  isPregnant           Boolean?
+  lastMenstrualPeriod  DateTime?
+  renalFunction        String?
+  previousExam         Boolean               @default(false)
+  previousExamDetails  String?
+  patientWeight        Decimal?              @db.Decimal(5, 2)
+  patientHeight        Decimal?              @db.Decimal(5, 2)
+  accessionNumber      String?
+  cancelReason         String?
+  cancelledBy          String?
+  cancelledDateTime    DateTime?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  studies              RadiologyStudy[]
+  
+  @@index([orderNumber])
+  @@index([patientId])
+  @@index([procedureId])
+  @@index([encounterId])
+  @@index([orderingProviderId])
+  @@index([orderDateTime])
+  @@index([scheduledDateTime])
+  @@index([priority])
+  @@index([status])
+}
+
+// RadiologyStudy - Imaging study data
+model RadiologyStudy {
+  id                   String                @id @default(uuid())
+  studyId              String                @unique // Often DICOM Study Instance UID
+  accessionNumber      String                @unique
+  patientId            String
+  orderId              String
+  order                RadiologyOrder        @relation(fields: [orderId], references: [id])
+  modalityId           String?
+  modality             RadiologyModality?    @relation(fields: [modalityId], references: [id])
+  studyDateTime        DateTime
+  completionDateTime   DateTime?
+  studyDescription     String
+  numberOfImages       Int?
+  performingTechId     String?
+  performingTechName   String?
+  studyStatus          String                // Scheduled, In Progress, Completed, Cancelled
+  studyPriority        String                // Routine, STAT, Urgent
+  radiationDose        String?
+  contrastUsed         Boolean               @default(false)
+  contrastType         String?
+  contrastVolume       String?
+  adverseReaction      Boolean               @default(false)
+  adverseReactionNotes String?
+  studyQuality         String?               // Optimal, Suboptimal, Limited
+  qualityIssues        String?
+  retakeRequired       Boolean               @default(false)
+  retakeReason         String?
+  patientPregnant      Boolean?
+  patientWeight        Decimal?              @db.Decimal(5, 2)
+  patientHeight        Decimal?              @db.Decimal(5, 2)
+  studyProtocol        String?
+  technicalNotes       String?
+  studyLocation        String?
+  storageStatus        String                @default("Online") // Online, Nearline, Offline, Archived
+  archiveLocation      String?
+  dicomStoragePath     String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  series               RadiologyStudySeries[]
+  reports              RadiologyReport[]
+  
+  @@index([studyId])
+  @@index([accessionNumber])
+  @@index([patientId])
+  @@index([orderId])
+  @@index([modalityId])
+  @@index([studyDateTime])
+  @@index([studyStatus])
+  @@index([studyPriority])
+}
+
+// RadiologyStudySeries - DICOM series within a study
+model RadiologyStudySeries {
+  id                   String                @id @default(uuid())
+  seriesId             String                @unique // DICOM Series Instance UID
+  studyId              String
+  study                RadiologyStudy        @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  seriesNumber         Int
+  seriesDescription    String?
+  seriesDateTime       DateTime
+  modality             String
+  bodyPart             String?
+  numberOfImages       Int
+  seriesStatus         String                @default("Complete") // Complete, Incomplete
+  protocolName         String?
+  performingTechId     String?
+  performingTechName   String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  instances            RadiologyInstance[]
+  
+  @@index([seriesId])
+  @@index([studyId])
+  @@index([seriesNumber])
+  @@index([modality])
+  @@index([seriesDateTime])
+}
+
+// RadiologyInstance - DICOM instances (images)
+model RadiologyInstance {
+  id                   String                @id @default(uuid())
+  instanceId           String                @unique // DICOM SOP Instance UID
+  seriesId             String
+  series               RadiologyStudySeries  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  instanceNumber       Int
+  contentDateTime      DateTime
+  imageType            String?
+  photometricInterpretation String?
+  rows                 Int?
+  columns              Int?
+  bitsAllocated        Int?
+  bitsStored           Int?
+  highBit              Int?
+  pixelRepresentation  Int?
+  sopClassUid          String?
+  storageUrl           String?               // URL to the DICOM file
+  thumbnailUrl         String?               // URL to a thumbnail
+  filePath             String?               // Path in the file system
+  fileSize             Int?                  // Size in bytes
+  md5Hash              String?               // File integrity hash
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([instanceId])
+  @@index([seriesId])
+  @@index([instanceNumber])
+  @@index([contentDateTime])
+}
+
+// RadiologyReport - Diagnostic reports for studies
+model RadiologyReport {
+  id                   String                @id @default(uuid())
+  reportId             String                @unique
+  studyId              String
+  study                RadiologyStudy        @relation(fields: [studyId], references: [id])
+  patientId            String
+  accessionNumber      String
+  radiologistId        String
+  radiologistName      String
+  reportStatus         String                // Draft, Preliminary, Final, Amended, Cancelled
+  reportPriority       String                // Routine, STAT, Urgent
+  reportDateTime       DateTime
+  finalizedDateTime    DateTime?
+  clinicalInformation  String?
+  technique            String?
+  findings             String
+  impression           String
+  recommendations      String?
+  comparisonStudies    String?
+  additionalComments   String?
+  amendmentReason      String?
+  amendmentText        String?
+  signedBy             String?
+  signatureDateTime    DateTime?
+  transcribedBy        String?
+  transcriptionDateTime DateTime?
+  isAbnormal           Boolean               @default(false)
+  criticalResult       Boolean               @default(false)
+  criticalResultCommunicatedTo String?
+  criticalResultDateTime DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  measurements         RadiologyMeasurement[]
+  keyImages            RadiologyKeyImage[]
+  
+  @@index([reportId])
+  @@index([studyId])
+  @@index([patientId])
+  @@index([accessionNumber])
+  @@index([radiologistId])
+  @@index([reportStatus])
+  @@index([reportPriority])
+  @@index([reportDateTime])
+  @@index([isAbnormal])
+  @@index([criticalResult])
+}
+
+// RadiologyMeasurement - Measurements recorded in reports
+model RadiologyMeasurement {
+  id                   String                @id @default(uuid())
+  reportId             String
+  report               RadiologyReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  measurementType      String                // Length, Area, Volume, Angle, Density, etc.
+  anatomicalLocation   String
+  value                Decimal               @db.Decimal(10, 3)
+  units                String
+  seriesId             String?
+  instanceId           String?
+  coordinateData       String?               // JSON with coordinate data
+  label                String?
+  sequence             Int                   @default(0)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([reportId])
+  @@index([measurementType])
+  @@index([anatomicalLocation])
+}
+
+// RadiologyKeyImage - Key images referenced in reports
+model RadiologyKeyImage {
+  id                   String                @id @default(uuid())
+  reportId             String
+  report               RadiologyReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  instanceId           String
+  seriesId             String
+  imageNumber          Int
+  description          String?
+  annotationData       String?               // JSON with annotation data
+  markerType           String?               // Arrow, Circle, Line, etc.
+  sequence             Int                   @default(0)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([reportId])
+  @@index([instanceId])
+  @@index([seriesId])
+}
+
+// RadiologyProtocol - Imaging protocols
+model RadiologyProtocol {
+  id                   String                @id @default(uuid())
+  protocolId           String                @unique
+  protocolName         String
+  modalityType         String                // X-Ray, CT, MRI, Ultrasound, etc.
+  bodyPart             String
+  description          String
+  indications          String[]
+  contraindications    String?
+  patientPreparation   String?
+  techniqueTips        String?
+  parameters           String?               // Technical parameters
+  contrastProtocol     String?
+  postProcessingSteps  String?
+  radiationDose        String?
+  averageScanTime      Int?                  // In minutes
+  status               String                @default("Active") // Active, Inactive, Draft
+  version              String
+  effectiveDate        DateTime
+  expirationDate       DateTime?
+  author               String
+  reviewers            String[]
+  approvalDate         DateTime?
+  nextReviewDate       DateTime?
+  attachmentUrl        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([protocolId])
+  @@index([modalityType])
+  @@index([bodyPart])
+  @@index([status])
+}
+
+// RadiologyTemplate - Report templates
+model RadiologyTemplate {
+  id                   String                @id @default(uuid())
+  templateId           String                @unique
+  templateName         String
+  modalityType         String                // X-Ray, CT, MRI, Ultrasound, etc.
+  bodyPart             String
+  procedureType        String?
+  description          String?
+  clinicalInformation  String?
+  technique            String?
+  findings             String?
+  impression           String?
+  recommendations      String?
+  author               String
+  status               String                @default("Active") // Active, Inactive, Draft
+  version              String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([templateId])
+  @@index([modalityType])
+  @@index([bodyPart])
+  @@index([status])
+}
+
+// RadiologySchedule - Schedule for radiology resources
+model RadiologySchedule {
+  id                   String                @id @default(uuid())
+  scheduleId           String                @unique
+  modalityId           String?
+  modalityType         String                // Equipment type if no specific modality
+  resourceType         String                // Equipment, Room, Staff
+  resourceId           String
+  scheduleDate         DateTime
+  startTime            String                // HH:MM format
+  endTime              String                // HH:MM format
+  status               String                @default("Available") // Available, Booked, Blocked, Maintenance
+  blockReason          String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  // Relations
+  slots                RadiologyTimeSlot[]
+  
+  @@index([scheduleId])
+  @@index([modalityId])
+  @@index([modalityType])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([scheduleDate])
+  @@index([status])
+}
+
+// RadiologyTimeSlot - Time slots within a schedule
+model RadiologyTimeSlot {
+  id                   String                @id @default(uuid())
+  scheduleId           String
+  schedule             RadiologySchedule     @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  slotDateTime         DateTime
+  duration             Int                   // Duration in minutes
+  status               String                @default("Available") // Available, Booked, Blocked
+  orderId              String?
+  patientId            String?
+  procedureId          String?
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([scheduleId])
+  @@index([slotDateTime])
+  @@index([status])
+  @@index([orderId])
+  @@index([patientId])
+}
+
+// RadiologyStaff - Radiology department staff
+model RadiologyStaff {
+  id                   String                @id @default(uuid())
+  staffId              String                @unique
+  userId               String
+  firstName            String
+  lastName             String
+  role                 String                // Radiologist, Technologist, Nurse, etc.
+  specialties          String[]
+  credentials          String?
+  status               String                @default("Active") // Active, Inactive, On Leave
+  email                String?
+  phone                String?
+  workingHours         String?               // JSON structure with working hours
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([staffId])
+  @@index([userId])
+  @@index([role])
+  @@index([status])
+}
+
+// RadiologyReadingWorkflow - Workflow for radiologist reading
+model RadiologyReadingWorkflow {
+  id                   String                @id @default(uuid())
+  workflowId           String                @unique
+  studyId              String
+  accessionNumber      String
+  patientId            String
+  procedureId          String
+  priority             String                // Routine, STAT, Urgent
+  assignedRadiologistId String?
+  assignmentDateTime   DateTime?
+  readingStartTime     DateTime?
+  readingEndTime       DateTime?
+  status               String                // Unassigned, Assigned, In Progress, Completed, Reassigned
+  turnaroundTime       Int?                  // Actual turnaround time in minutes
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([workflowId])
+  @@index([studyId])
+  @@index([accessionNumber])
+  @@index([patientId])
+  @@index([assignedRadiologistId])
+  @@index([priority])
+  @@index([status])
+}
+
+// RadiologyDoseRecord - Radiation dose tracking
+model RadiologyDoseRecord {
+  id                   String                @id @default(uuid())
+  studyId              String
+  patientId            String
+  accessionNumber      String
+  procedureId          String
+  modalityId           String
+  examDate             DateTime
+  doseMetricType       String                // CTDIvol, DLP, DAP, etc.
+  doseValue            Decimal               @db.Decimal(10, 3)
+  doseUnit             String
+  dlpValue             Decimal?              @db.Decimal(10, 3) // Dose Length Product
+  effectiveDose        Decimal?              @db.Decimal(10, 3) // Effective dose in mSv
+  acquisitionParameters String?
+  technologistId       String?
+  deviceSerialNumber   String?
+  protocolName         String?
+  bodyPart             String
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([studyId])
+  @@index([patientId])
+  @@index([accessionNumber])
+  @@index([modalityId])
+  @@index([examDate])
+  @@index([doseMetricType])
+}
+
+// RadiologyPeerReview - Peer review of radiology reports
+model RadiologyPeerReview {
+  id                   String                @id @default(uuid())
+  reviewId             String                @unique
+  reportId             String
+  studyId              String
+  originalRadiologistId String
+  reviewingRadiologistId String
+  reviewDateTime       DateTime
+  agreementLevel       String                // Complete Agreement, Minor Disagreement, Significant Disagreement
+  discrepancyType      String?               // Miss, Misinterpretation, Overcall, etc.
+  clinicalSignificance String?               // None, Low, Medium, High
+  feedback             String?
+  actionTaken          String?
+  isAnonymized         Boolean               @default(true)
+  status               String                // Pending, Completed, Disputed
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([reviewId])
+  @@index([reportId])
+  @@index([studyId])
+  @@index([originalRadiologistId])
+  @@index([reviewingRadiologistId])
+  @@index([reviewDateTime])
+  @@index([agreementLevel])
+}
+
+// RadiologyDiscrepancy - Tracking of report discrepancies
+model RadiologyDiscrepancy {
+  id                   String                @id @default(uuid())
+  discrepancyId        String                @unique
+  reportId             String
+  studyId              String
+  accessionNumber      String
+  patientId            String
+  identifiedBy         String
+  identifiedDateTime   DateTime
+  radiologistId        String
+  discrepancyType      String                // Interpretation, Transcription, Patient, Procedure
+  description          String
+  severity             String                // Minor, Moderate, Major
+  clinicalImpact       String                // None, Low, Medium, High
+  correctiveAction     String?
+  actionTakenBy        String?
+  actionDateTime       DateTime?
+  status               String                // Identified, Reviewed, Resolved, Disputed
+  resolutionComments   String?
+  qualityImprovementActions String?
+  notifiedPatient      Boolean               @default(false)
+  notifiedProvider     Boolean               @default(false)
+  notes                String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  
+  @@index([discrepancyId])
+  @@index([reportId])
+  @@index([studyId])
+  @@index([patientId])
+  @@index([radiologistId])
+  @@index([identifiedDateTime])
+  @@index([discrepancyType])
+  @@index([severity])
+  @@index([status])
+}
+
+// RadiologyAuditLog - Audit trail for radiology actions
+model RadiologyAuditLog {
+  id                   String                @id @default(uuid())
+  actionType           String                // View, Create, Update, Delete, Print, Export
+  resourceType         String                // Order, Study, Report, Protocol, etc.
+  resourceId           String
+  patientId            String?
+  performedBy          String
+  performerRole        String
+  actionDateTime       DateTime              @default(now())
+  details              String?
+  ipAddress            String?
+  userAgent            String?
+  createdAt            DateTime              @default(now())
+  
+  @@index([actionType])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([patientId])
+  @@index([performedBy])
+  @@index([actionDateTime])
+}

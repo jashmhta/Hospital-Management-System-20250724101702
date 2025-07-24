@@ -1,0 +1,609 @@
+// Infection Control Schema
+
+// Infection Report - Records infection incidents within the hospital
+model InfectionReport {
+  id                  String               @id @default(cuid())
+  patientId           String
+  patient             Patient              @relation(fields: [patientId], references: [id])
+  reportedById        String
+  reportedBy          User                 @relation(fields: [reportedById], references: [id])
+  infectionTypeId     String
+  infectionType       InfectionType        @relation(fields: [infectionTypeId], references: [id])
+  locationId          String?
+  location            Location?            @relation(fields: [locationId], references: [id])
+  onsetDate           DateTime
+  reportDate          DateTime             @default(now())
+  symptoms            String               @db.Text
+  diagnosisNotes      String?              @db.Text
+  organismId          String?
+  organism            Organism?            @relation(fields: [organismId], references: [id])
+  labTestIds          String[]
+  labResults          Json?
+  interventions       InfectionIntervention[]
+  status              InfectionStatus      @default(SUSPECTED)
+  severity            InfectionSeverity    @default(MODERATE)
+  isHAI               Boolean              @default(false)  // Hospital-Acquired Infection
+  isolationRequired   Boolean              @default(false)
+  isolationTypeId     String?
+  isolationType       IsolationType?       @relation(fields: [isolationTypeId], references: [id])
+  isolationStartDate  DateTime?
+  isolationEndDate    DateTime?
+  isResolved          Boolean              @default(false)
+  resolutionDate      DateTime?
+  resolutionNotes     String?              @db.Text
+  notificationSent    Boolean              @default(false)
+  notificationDate    DateTime?
+  followUpDate        DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  auditLogs           AuditLog[]
+
+  @@index([patientId])
+  @@index([infectionTypeId])
+  @@index([organismId])
+  @@index([status])
+  @@index([onsetDate])
+  @@index([isHAI])
+  @@index([isolationRequired])
+}
+
+// Infection Types - Catalog of different infection types
+model InfectionType {
+  id                  String               @id @default(cuid())
+  name                String               @unique
+  description         String?              @db.Text
+  icdCode             String?              // ICD-10/11 code
+  category            String
+  commonSymptoms      String[]
+  recommendedTests    String[]
+  recommendedPrecautions String[]
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  infectionReports    InfectionReport[]
+  outbreaks           Outbreak[]
+
+  @@index([name])
+  @@index([category])
+  @@index([isActive])
+}
+
+// Organisms - Pathogens that cause infections
+model Organism {
+  id                  String               @id @default(cuid())
+  name                String               @unique
+  scientificName      String
+  type                OrganismType
+  description         String?              @db.Text
+  resistanceProfiles  ResistanceProfile[]
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  infectionReports    InfectionReport[]
+  outbreaks           Outbreak[]
+
+  @@index([name])
+  @@index([type])
+  @@index([isActive])
+}
+
+// Antibiotic Resistance Profiles
+model ResistanceProfile {
+  id                  String               @id @default(cuid())
+  organismId          String
+  organism            Organism             @relation(fields: [organismId], references: [id])
+  antibioticId        String
+  antibiotic          Medication           @relation(fields: [antibioticId], references: [id])
+  resistanceLevel     ResistanceLevel
+  notes               String?              @db.Text
+  testMethod          String?
+  testDate            DateTime
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([organismId])
+  @@index([antibioticId])
+  @@index([resistanceLevel])
+}
+
+// Isolation Types - Different types of isolation precautions
+model IsolationType {
+  id                  String               @id @default(cuid())
+  name                String               @unique
+  description         String               @db.Text
+  precautions         String[]
+  requiredPPE         String[]
+  instructions        String               @db.Text
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  infectionReports    InfectionReport[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+// Infection Intervention - Actions taken to address an infection
+model InfectionIntervention {
+  id                  String               @id @default(cuid())
+  infectionReportId   String
+  infectionReport     InfectionReport      @relation(fields: [infectionReportId], references: [id])
+  interventionType    InterventionType
+  description         String               @db.Text
+  orderedById         String
+  orderedBy           User                 @relation(fields: [orderedById], references: [id])
+  startDate           DateTime
+  endDate             DateTime?
+  status              InterventionStatus   @default(ORDERED)
+  effectiveness       InterventionEffectiveness?
+  notes               String?              @db.Text
+  medicationId        String?
+  medication          Medication?          @relation(fields: [medicationId], references: [id])
+  dosage              String?
+  frequency           String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  auditLogs           AuditLog[]
+
+  @@index([infectionReportId])
+  @@index([interventionType])
+  @@index([orderedById])
+  @@index([status])
+  @@index([medicationId])
+}
+
+// Outbreak Management
+model Outbreak {
+  id                  String               @id @default(cuid())
+  name                String
+  infectionTypeId     String
+  infectionType       InfectionType        @relation(fields: [infectionTypeId], references: [id])
+  organismId          String?
+  organism            Organism?            @relation(fields: [organismId], references: [id])
+  startDate           DateTime
+  endDate             DateTime?
+  description         String               @db.Text
+  status              OutbreakStatus       @default(ACTIVE)
+  affectedLocations   Location[]
+  affectedCount       Int                  @default(0)
+  containmentMeasures String[]             @db.Text
+  notificationSent    Boolean              @default(false)
+  notificationDate    DateTime?
+  reportedToAuthorities Boolean            @default(false)
+  reportDate          DateTime?
+  reportedById        String
+  reportedBy          User                 @relation(fields: [reportedById], references: [id])
+  reviewDate          DateTime?
+  reviewNotes         String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  outbreakCases       OutbreakCase[]
+  auditLogs           AuditLog[]
+
+  @@index([infectionTypeId])
+  @@index([organismId])
+  @@index([status])
+  @@index([startDate])
+  @@index([reportedById])
+}
+
+// Outbreak Cases - Connects patients to an outbreak
+model OutbreakCase {
+  id                  String               @id @default(cuid())
+  outbreakId          String
+  outbreak            Outbreak             @relation(fields: [outbreakId], references: [id])
+  patientId           String
+  patient             Patient              @relation(fields: [patientId], references: [id])
+  infectionReportId   String?
+  dateIdentified      DateTime             @default(now())
+  notes               String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([outbreakId])
+  @@index([patientId])
+}
+
+// Hand Hygiene Compliance Audit
+model HandHygieneAudit {
+  id                  String               @id @default(cuid())
+  departmentId        String
+  department          Department           @relation(fields: [departmentId], references: [id])
+  locationId          String?
+  location            Location?            @relation(fields: [locationId], references: [id])
+  auditDate           DateTime
+  auditedById         String
+  auditedBy           User                 @relation(fields: [auditedById], references: [id])
+  totalOpportunities  Int
+  totalCompliant      Int
+  complianceRate      Float                @default(0)
+  shiftType           ShiftType
+  notes               String?              @db.Text
+  followUpRequired    Boolean              @default(false)
+  followUpNotes       String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  handHygieneObservations HandHygieneObservation[]
+
+  @@index([departmentId])
+  @@index([locationId])
+  @@index([auditDate])
+  @@index([auditedById])
+  @@index([shiftType])
+}
+
+// Hand Hygiene Observation - Individual observations within an audit
+model HandHygieneObservation {
+  id                  String               @id @default(cuid())
+  auditId             String
+  audit               HandHygieneAudit     @relation(fields: [auditId], references: [id])
+  staffId             String?
+  staff               User?                @relation(fields: [staffId], references: [id])
+  staffRole           StaffRole
+  momentType          HygieneOpportunityType
+  compliant           Boolean
+  notes               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([auditId])
+  @@index([staffId])
+  @@index([staffRole])
+  @@index([momentType])
+  @@index([compliant])
+}
+
+// Environmental Cleaning Audit
+model EnvironmentalCleaningAudit {
+  id                  String               @id @default(cuid())
+  locationId          String
+  location            Location             @relation(fields: [locationId], references: [id])
+  auditDate           DateTime
+  auditedById         String
+  auditedBy           User                 @relation(fields: [auditedById], references: [id])
+  totalPoints         Int
+  scoreObtained       Int
+  complianceRate      Float                @default(0)
+  cleaningMethodUsed  String?
+  notes               String?              @db.Text
+  followUpRequired    Boolean              @default(false)
+  followUpNotes       String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  cleaningAuditItems  EnvironmentalCleaningAuditItem[]
+
+  @@index([locationId])
+  @@index([auditDate])
+  @@index([auditedById])
+  @@index([complianceRate])
+}
+
+// Environmental Cleaning Audit Items
+model EnvironmentalCleaningAuditItem {
+  id                  String               @id @default(cuid())
+  auditId             String
+  audit               EnvironmentalCleaningAudit @relation(fields: [auditId], references: [id])
+  itemName            String
+  cleaningStandard    String
+  compliant           Boolean
+  notes               String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([auditId])
+  @@index([compliant])
+}
+
+// Infection Control Training
+model InfectionControlTraining {
+  id                  String               @id @default(cuid())
+  title               String
+  description         String               @db.Text
+  trainingType        TrainingType
+  targetAudience      StaffRole[]
+  duration            Int                  // Duration in minutes
+  frequency           TrainingFrequency
+  isRequired          Boolean              @default(true)
+  content             String?              @db.Text
+  testRequired        Boolean              @default(true)
+  passingScore        Int?
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  trainingSchedules   TrainingSchedule[]
+
+  @@index([trainingType])
+  @@index([isRequired])
+  @@index([isActive])
+}
+
+// Training Schedule
+model TrainingSchedule {
+  id                  String               @id @default(cuid())
+  trainingId          String
+  training            InfectionControlTraining @relation(fields: [trainingId], references: [id])
+  scheduledDate       DateTime
+  locationId          String?
+  location            Location?            @relation(fields: [locationId], references: [id])
+  instructorId        String?
+  instructor          User?                @relation(fields: [instructorId], references: [id])
+  maxAttendees        Int?
+  attendees           TrainingAttendance[]
+  status              TrainingStatus       @default(SCHEDULED)
+  notes               String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([trainingId])
+  @@index([scheduledDate])
+  @@index([instructorId])
+  @@index([status])
+}
+
+// Training Attendance
+model TrainingAttendance {
+  id                  String               @id @default(cuid())
+  scheduleId          String
+  schedule            TrainingSchedule     @relation(fields: [scheduleId], references: [id])
+  attendeeId          String
+  attendee            User                 @relation(fields: [attendeeId], references: [id])
+  status              AttendanceStatus     @default(REGISTERED)
+  attendanceTime      DateTime?
+  completionStatus    CompletionStatus     @default(NOT_STARTED)
+  testScore           Int?
+  certificateIssued   Boolean              @default(false)
+  certificateId       String?
+  expiryDate          DateTime?
+  notes               String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([scheduleId])
+  @@index([attendeeId])
+  @@index([status])
+  @@index([completionStatus])
+  @@index([certificateIssued])
+}
+
+// Infection Control Policy
+model InfectionControlPolicy {
+  id                  String               @id @default(cuid())
+  title               String
+  policyNumber        String               @unique
+  version             String
+  description         String               @db.Text
+  category            PolicyCategory
+  content             String               @db.Text
+  effectiveDate       DateTime
+  reviewDate          DateTime
+  nextReviewDate      DateTime
+  approvedById        String
+  approvedBy          User                 @relation(fields: [approvedById], references: [id])
+  status              PolicyStatus         @default(DRAFT)
+  attachments         String[]             // URLs or file paths
+  relatedPolicies     InfectionControlPolicy[] @relation("RelatedPolicies")
+  relatedTo           InfectionControlPolicy[] @relation("RelatedPolicies")
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  auditLogs           AuditLog[]
+
+  @@index([policyNumber])
+  @@index([category])
+  @@index([status])
+  @@index([effectiveDate])
+  @@index([isActive])
+}
+
+// Surveillance Definition
+model SurveillanceDefinition {
+  id                  String               @id @default(cuid())
+  name                String               @unique
+  description         String               @db.Text
+  targetCondition     String
+  caseCriteria        String               @db.Text
+  dataPoints          String[]
+  calculationMethod   String               @db.Text
+  thresholdValue      Float
+  notificationTrigger Boolean              @default(true)
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  surveillanceReports SurveillanceReport[]
+
+  @@index([name])
+  @@index([targetCondition])
+  @@index([isActive])
+}
+
+// Surveillance Report
+model SurveillanceReport {
+  id                  String               @id @default(cuid())
+  definitionId        String
+  definition          SurveillanceDefinition @relation(fields: [definitionId], references: [id])
+  reportPeriodStart   DateTime
+  reportPeriodEnd     DateTime
+  generatedById       String
+  generatedBy         User                 @relation(fields: [generatedById], references: [id])
+  departmentId        String?
+  department          Department?          @relation(fields: [departmentId], references: [id])
+  caseCount           Int
+  denominatorValue    Int
+  calculatedRate      Float
+  thresholdExceeded   Boolean              @default(false)
+  notificationSent    Boolean              @default(false)
+  notificationDate    DateTime?
+  notes               String?              @db.Text
+  actionTaken         String?              @db.Text
+  reportData          Json
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  auditLogs           AuditLog[]
+
+  @@index([definitionId])
+  @@index([reportPeriodStart])
+  @@index([reportPeriodEnd])
+  @@index([departmentId])
+  @@index([thresholdExceeded])
+}
+
+// Enumerations
+enum InfectionStatus {
+  SUSPECTED
+  CONFIRMED
+  RULED_OUT
+  RESOLVED
+  CHRONIC
+  RECURRENT
+}
+
+enum InfectionSeverity {
+  MILD
+  MODERATE
+  SEVERE
+  CRITICAL
+}
+
+enum OrganismType {
+  BACTERIA
+  VIRUS
+  FUNGUS
+  PARASITE
+  PRION
+  OTHER
+}
+
+enum ResistanceLevel {
+  SUSCEPTIBLE
+  INTERMEDIATE
+  RESISTANT
+  HIGHLY_RESISTANT
+  UNKNOWN
+}
+
+enum InterventionType {
+  MEDICATION
+  ISOLATION
+  PROCEDURE
+  DRESSING_CHANGE
+  LABORATORY_TEST
+  CONSULTATION
+  EDUCATION
+  OTHER
+}
+
+enum InterventionStatus {
+  ORDERED
+  IN_PROGRESS
+  COMPLETED
+  DISCONTINUED
+  DEFERRED
+}
+
+enum InterventionEffectiveness {
+  HIGHLY_EFFECTIVE
+  MODERATELY_EFFECTIVE
+  SLIGHTLY_EFFECTIVE
+  NOT_EFFECTIVE
+  UNKNOWN
+}
+
+enum OutbreakStatus {
+  SUSPECTED
+  ACTIVE
+  CONTAINED
+  RESOLVED
+  UNDER_INVESTIGATION
+}
+
+enum ShiftType {
+  MORNING
+  AFTERNOON
+  EVENING
+  NIGHT
+  ALL_DAY
+}
+
+enum HygieneOpportunityType {
+  BEFORE_PATIENT_CONTACT
+  AFTER_PATIENT_CONTACT
+  BEFORE_ASEPTIC_PROCEDURE
+  AFTER_BODY_FLUID_EXPOSURE
+  AFTER_PATIENT_ENVIRONMENT_CONTACT
+}
+
+enum StaffRole {
+  PHYSICIAN
+  NURSE
+  TECHNICIAN
+  THERAPIST
+  SUPPORT_STAFF
+  ADMINISTRATION
+  OTHER
+}
+
+enum TrainingType {
+  ORIENTATION
+  ANNUAL_REFRESHER
+  COMPETENCY_ASSESSMENT
+  OUTBREAK_RESPONSE
+  POLICY_UPDATE
+  EQUIPMENT_SPECIFIC
+  OTHER
+}
+
+enum TrainingFrequency {
+  ONE_TIME
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUALLY
+  ANNUALLY
+  BIANNUALLY
+  AS_NEEDED
+}
+
+enum TrainingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+enum AttendanceStatus {
+  REGISTERED
+  CHECKED_IN
+  NO_SHOW
+  EXCUSED
+}
+
+enum CompletionStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  EXEMPTED
+}
+
+enum PolicyCategory {
+  STANDARD_PRECAUTIONS
+  TRANSMISSION_BASED_PRECAUTIONS
+  HAND_HYGIENE
+  PPE_USAGE
+  STERILIZATION
+  ENVIRONMENTAL_CLEANING
+  OUTBREAK_MANAGEMENT
+  SURVEILLANCE
+  ANTIBIOTIC_STEWARDSHIP
+  EMPLOYEE_HEALTH
+  OTHER
+}
+
+enum PolicyStatus {
+  DRAFT
+  UNDER_REVIEW
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+  SUPERSEDED
+}

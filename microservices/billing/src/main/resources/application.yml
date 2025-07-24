@@ -1,0 +1,314 @@
+# Billing Service Configuration
+server:
+  port: ${SERVER_PORT:8083}
+  servlet:
+    context-path: /billing
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+spring:
+  application:
+    name: billing-service
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database Configuration
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/billing_db}
+    username: ${DATABASE_USERNAME:billing_user}
+    password: ${DATABASE_PASSWORD:billing_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 25
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
+    open-in-view: false
+
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 900000 # 15 minutes
+      cache-null-values: false
+
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:2}
+      timeout: 2000ms
+      jedis:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/auth/realms/hms/protocol/openid-connect/certs}
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: billing-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.hospital.hms.billing.event
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,loggers
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+  health:
+    redis:
+      enabled: true
+    diskspace:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: true
+
+# Billing Service Specific Configuration
+billing:
+  invoice:
+    number-prefix: \"INV\"
+    auto-generate-number: true
+    default-due-days: 30
+    late-fee-percentage: 5.0
+
+  payment:
+    processor:
+      timeout-seconds: 30
+      retry-attempts: 3
+      supported-methods: CASH,CREDIT_CARD,DEBIT_CARD,INSURANCE,CHECK
+
+  insurance:
+    verification:
+      enabled: true
+      auto-verify: false
+      timeout-seconds: 15
+
+  collections:
+    reminder-days: [7, 14, 30]
+    auto-send-reminders: true
+    collection-agency-days: 90
+
+  reporting:
+    revenue-cycle:
+      enabled: true
+      daily-reports: true
+      monthly-reports: true
+    financial-dashboard:
+      enabled: true
+      real-time-updates: true
+
+  taxation:
+    enabled: true
+    default-tax-rate: 8.5
+    tax-calculation-service: internal
+
+  integration:
+    accounting-system:
+      enabled: false
+      endpoint: ${ACCOUNTING_SYSTEM_ENDPOINT:}
+    payment-gateway:
+      enabled: true
+      endpoint: ${PAYMENT_GATEWAY_ENDPOINT:}
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      billing-service:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+      payment-gateway:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 30
+        wait-duration-in-open-state: 60s
+
+  retry:
+    instances:
+      billing-service:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+      payment-processor:
+        max-attempts: 2
+        wait-duration: 2s
+
+  timelimiter:
+    instances:
+      billing-service:
+        timeout-duration: 15s
+      payment-gateway:
+        timeout-duration: 30s
+
+# Logging Configuration
+logging:
+  level:
+    com.hospital.hms.billing: ${LOG_LEVEL:INFO}
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.springframework.data: WARN
+    org.hibernate: WARN
+    org.springframework.kafka: INFO
+    root: ${ROOT_LOG_LEVEL:INFO}
+  pattern:
+    console: \"%d{yyyy-MM-dd HH:mm:ss} - %msg%n\"
+    file: \"%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n\"
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:h2:mem:billing_dev
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+logging:
+  level:
+    com.hospital.hms.billing: DEBUG
+    org.springframework.security: DEBUG
+
+billing:
+  payment:
+    processor:
+      timeout-seconds: 60
+  insurance:
+    verification:
+      auto-verify: true
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:h2:mem:billing_test
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+eureka:
+  client:
+    enabled: false
+
+billing:
+  integration:
+    accounting-system:
+      enabled: false
+    payment-gateway:
+      enabled: false
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  jpa:
+    show-sql: false
+
+logging:
+  level:
+    com.hospital.hms.billing: INFO
+    org.springframework.security: WARN
+    root: WARN
+
+billing:
+  collections:
+    auto-send-reminders: true
+  reporting:
+    revenue-cycle:
+      enabled: true
+    financial-dashboard:
+      real-time-updates: true"

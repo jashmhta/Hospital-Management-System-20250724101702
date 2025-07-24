@@ -1,0 +1,73 @@
+{
+  "timestamp": 1750182242.0023298,
+  "project_path": "/workspace/Hospital-Management-System",
+  "file_analysis": {
+    "typescript": 379,
+    "javascript": 1,
+    "react": 192,
+    "config": 1,
+    "total": 578
+  },
+  "configuration_analysis": {
+    "tsconfig": true,
+    "tsconfig_strict": true,
+    "eslint": true,
+    "prettier": true,
+    "package_json": true
+  },
+  "dependency_analysis": {
+    "package_json_exists": true,
+    "node_modules_exists": true,
+    "latest_versions": {
+      "next": "^15.1.4",
+      "react": "^19.0.0",
+      "typescript": "^5.8.3",
+      "eslint": "^9",
+      "prettier": "^3.5.3"
+    },
+    "security_vulnerabilities": 0
+  },
+  "quality_analysis": {
+    "typescript_compilation": {
+      "success": false,
+      "errors": 0,
+      "warnings": 0
+    },
+    "eslint_check": {
+      "success": false,
+      "errors": 0,
+      "warnings": 0
+    },
+    "prettier_check": {
+      "success": false,
+      "issues": 3
+    },
+    "build_check": {
+      "success": false,
+      "duration": 5.036153793334961
+    }
+  },
+  "enterprise_scores": {
+    "configuration": 25,
+    "dependencies": 25,
+    "code_quality": 13,
+    "project_structure": 15,
+    "overall": 78
+  },
+  "recommendations": [
+    "\ud83d\udea8 Fix TypeScript compilation errors before production deployment",
+    "\ud83c\udfd7\ufe0f Resolve build issues to ensure deployability",
+    "\ud83d\udd0d Address ESLint violations for code quality",
+    "\ud83d\udc85 Apply Prettier formatting for consistent code style",
+    "\u2b50 Good progress! Minor improvements needed for full enterprise readiness"
+  ],
+  "summary": {
+    "overall_score": 78,
+    "grade": "B",
+    "status": "Near Enterprise Ready",
+    "total_files": 578,
+    "typescript_files": 571,
+    "build_ready": false,
+    "type_safe": false
+  }
+}

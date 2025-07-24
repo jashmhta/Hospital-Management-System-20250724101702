@@ -1,0 +1,6 @@
+package com.hospital.hms.analytics.entity;
+
+public enum JobType {
+    BATCH_ETL, STREAM_PROCESSING, DATA_VALIDATION, DATA_CLEANSING, 
+    DATA_TRANSFORMATION, DATA_MIGRATION, REAL_TIME_SYNC, SCHEDULED_EXPORT
+}

@@ -1,0 +1,466 @@
+// Clinical Documentation Schema
+
+// Clinical Notes
+model ClinicalNote {
+  id                 String           @id @default(cuid())
+  patientId          String
+  patient            Patient          @relation(fields: [patientId], references: [id])
+  encounterId        String?
+  encounter          Encounter?       @relation(fields: [encounterId], references: [id])
+  authorId           String
+  author             User             @relation(fields: [authorId], references: [id])
+  noteType           ClinicalNoteType
+  title              String
+  content            String           @db.Text
+  status             NoteStatus       @default(DRAFT)
+  signatures         Signature[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  deletedAt          DateTime?
+  isDeleted          Boolean          @default(false)
+  templates          ClinicalNoteTemplate[]
+  attachments        Attachment[]
+  isConfidential     Boolean          @default(false)
+  version            Int              @default(1)
+  previousVersionId  String?
+  previousVersion    ClinicalNote?    @relation("NoteVersions", fields: [previousVersionId], references: [id])
+  nextVersions       ClinicalNote[]   @relation("NoteVersions")
+  auditLogs          AuditLog[]
+
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([authorId])
+  @@index([noteType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Clinical Note Templates
+model ClinicalNoteTemplate {
+  id           String             @id @default(cuid())
+  name         String
+  description  String?
+  specialtyId  String?
+  specialty    Specialty?         @relation(fields: [specialtyId], references: [id])
+  departmentId String?
+  department   Department?        @relation(fields: [departmentId], references: [id])
+  content      String             @db.Text
+  noteType     ClinicalNoteType
+  isActive     Boolean            @default(true)
+  createdBy    String
+  author       User               @relation(fields: [createdBy], references: [id])
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  notes        ClinicalNote[]
+  sections     TemplateSection[]
+  fields       TemplateField[]
+  isSystem     Boolean            @default(false)
+  version      Int                @default(1)
+
+  @@index([specialtyId])
+  @@index([departmentId])
+  @@index([noteType])
+  @@index([isActive])
+}
+
+// Template Sections
+model TemplateSection {
+  id           String               @id @default(cuid())
+  templateId   String
+  template     ClinicalNoteTemplate @relation(fields: [templateId], references: [id])
+  name         String
+  description  String?
+  displayOrder Int
+  isRequired   Boolean              @default(false)
+  content      String?              @db.Text
+  fields       TemplateField[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([templateId])
+}
+
+// Template Fields
+model TemplateField {
+  id             String               @id @default(cuid())
+  templateId     String
+  template       ClinicalNoteTemplate @relation(fields: [templateId], references: [id])
+  sectionId      String?
+  section        TemplateSection?     @relation(fields: [sectionId], references: [id])
+  name           String
+  label          String
+  fieldType      FieldType
+  options        Json?                // For dropdown, radio, etc.
+  defaultValue   String?
+  isRequired     Boolean              @default(false)
+  validationRule String?              // Regex or validation rules
+  displayOrder   Int
+  helpText       String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([templateId])
+  @@index([sectionId])
+}
+
+// Signatures for clinical documentation
+model Signature {
+  id            String       @id @default(cuid())
+  clinicalNoteId String
+  clinicalNote  ClinicalNote @relation(fields: [clinicalNoteId], references: [id])
+  signerId      String
+  signer        User         @relation(fields: [signerId], references: [id])
+  signatureTime DateTime     @default(now())
+  signatureType SignatureType
+  ip            String?
+  deviceInfo    String?
+  remarks       String?
+  isValid       Boolean      @default(true)
+
+  @@index([clinicalNoteId])
+  @@index([signerId])
+}
+
+// Document attachments
+model Attachment {
+  id                String         @id @default(cuid())
+  clinicalNoteId    String?
+  clinicalNote      ClinicalNote?  @relation(fields: [clinicalNoteId], references: [id])
+  patientId         String
+  patient           Patient        @relation(fields: [patientId], references: [id])
+  fileName          String
+  fileType          String
+  fileSize          Int
+  storageLocation   String         // S3 key or file path
+  uploadedBy        String
+  uploader          User           @relation(fields: [uploadedBy], references: [id])
+  uploadTime        DateTime       @default(now())
+  documentType      DocumentType
+  documentDate      DateTime?
+  description       String?
+  isConfidential    Boolean        @default(false)
+  tags              String[]
+  isDeleted         Boolean        @default(false)
+  deletedAt         DateTime?
+  deletedBy         String?
+  deleter           User?          @relation("DeletedAttachments", fields: [deletedBy], references: [id])
+  thumbnailLocation String?
+  contentHash       String?        // MD5 or SHA hash for integrity
+  auditLogs         AuditLog[]
+
+  @@index([patientId])
+  @@index([clinicalNoteId])
+  @@index([uploadedBy])
+  @@index([documentType])
+  @@index([isConfidential])
+  @@index([isDeleted])
+}
+
+// Progress Notes
+model ProgressNote {
+  id          String       @id @default(cuid())
+  patientId   String
+  patient     Patient      @relation(fields: [patientId], references: [id])
+  encounterId String?
+  encounter   Encounter?   @relation(fields: [encounterId], references: [id])
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id])
+  content     String       @db.Text
+  noteDate    DateTime     @default(now())
+  followUp    DateTime?
+  status      NoteStatus   @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  isDeleted   Boolean      @default(false)
+  deletedAt   DateTime?
+  auditLogs   AuditLog[]
+
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([authorId])
+  @@index([noteDate])
+  @@index([status])
+}
+
+// Consultation Notes
+model ConsultationNote {
+  id               String       @id @default(cuid())
+  patientId        String
+  patient          Patient      @relation(fields: [patientId], references: [id])
+  encounterId      String?
+  encounter        Encounter?   @relation(fields: [encounterId], references: [id])
+  consultantId     String
+  consultant       User         @relation(fields: [consultantId], references: [id])
+  requestedById    String
+  requestedBy      User         @relation("ConsultRequester", fields: [requestedById], references: [id])
+  requestReason    String
+  consultationDate DateTime
+  findings         String       @db.Text
+  diagnosis        String?
+  recommendations  String?      @db.Text
+  followUp         DateTime?
+  status           NoteStatus   @default(DRAFT)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  isDeleted        Boolean      @default(false)
+  deletedAt        DateTime?
+  auditLogs        AuditLog[]
+
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([consultantId])
+  @@index([requestedById])
+  @@index([consultationDate])
+  @@index([status])
+}
+
+// Discharge Summaries
+model DischargeSummary {
+  id                 String           @id @default(cuid())
+  patientId          String
+  patient            Patient          @relation(fields: [patientId], references: [id])
+  admissionId        String           @unique
+  admission          Admission        @relation(fields: [admissionId], references: [id])
+  authorId           String
+  author             User             @relation(fields: [authorId], references: [id])
+  admissionDate      DateTime
+  dischargeDate      DateTime
+  admissionDiagnosis String
+  dischargeDiagnosis String[]
+  proceduresPerformed String[]
+  clinicalCourse     String           @db.Text
+  medications        DischargemedOrder[]
+  followUpInstructions String?        @db.Text
+  followUpAppointment DateTime?
+  dischargeTo        DischargeDestination
+  condition          PatientCondition
+  status             NoteStatus       @default(DRAFT)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  isDeleted          Boolean          @default(false)
+  deletedAt          DateTime?
+  auditLogs          AuditLog[]
+
+  @@index([patientId])
+  @@index([admissionId])
+  @@index([authorId])
+  @@index([dischargeDate])
+  @@index([status])
+}
+
+// Discharge Medication Orders
+model DischargemedOrder {
+  id                 String           @id @default(cuid())
+  dischargeSummaryId String
+  dischargeSummary   DischargeSummary @relation(fields: [dischargeSummaryId], references: [id])
+  medicationId       String
+  medication         Medication       @relation(fields: [medicationId], references: [id])
+  dosage             String
+  route              String
+  frequency          String
+  duration           String?
+  quantity           Int?
+  instructions       String?
+  isActive           Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([dischargeSummaryId])
+  @@index([medicationId])
+}
+
+// Operative Reports
+model OperativeReport {
+  id                   String       @id @default(cuid())
+  patientId            String
+  patient              Patient      @relation(fields: [patientId], references: [id])
+  surgeryId            String       @unique
+  surgery              Surgery      @relation(fields: [surgeryId], references: [id])
+  surgeonId            String
+  surgeon              User         @relation(fields: [surgeonId], references: [id])
+  assistants           User[]       @relation("SurgeryAssistants")
+  anesthesiologistId   String?
+  anesthesiologist     User?        @relation("AnesthesiologistReport", fields: [anesthesiologistId], references: [id])
+  preOperativeDiagnosis String
+  postOperativeDiagnosis String
+  procedurePerformed   String
+  anesthesiaType       String
+  operationDate        DateTime
+  incisionTime         DateTime
+  closureTime          DateTime
+  findings             String       @db.Text
+  technique            String       @db.Text
+  specimens            String?
+  estimatedBloodLoss   String?
+  complications        String?
+  disposition          String
+  status               NoteStatus   @default(DRAFT)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  isDeleted            Boolean      @default(false)
+  deletedAt            DateTime?
+  auditLogs            AuditLog[]
+
+  @@index([patientId])
+  @@index([surgeryId])
+  @@index([surgeonId])
+  @@index([operationDate])
+  @@index([status])
+}
+
+// Procedure Notes
+model ProcedureNote {
+  id                 String       @id @default(cuid())
+  patientId          String
+  patient            Patient      @relation(fields: [patientId], references: [id])
+  encounterId        String?
+  encounter          Encounter?   @relation(fields: [encounterId], references: [id])
+  performedById      String
+  performedBy        User         @relation(fields: [performedById], references: [id])
+  assistants         User[]       @relation("ProcedureAssistants")
+  procedureType      String
+  procedureDate      DateTime
+  location           String
+  indication         String
+  description        String       @db.Text
+  findings           String       @db.Text
+  complications      String?
+  specimens          String?
+  postProcedureDx    String?
+  postProcedureInstructions String? @db.Text
+  status             NoteStatus   @default(DRAFT)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  isDeleted          Boolean      @default(false)
+  deletedAt          DateTime?
+  auditLogs          AuditLog[]
+
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([performedById])
+  @@index([procedureDate])
+  @@index([status])
+}
+
+// History and Physical
+model HistoryAndPhysical {
+  id                 String       @id @default(cuid())
+  patientId          String
+  patient            Patient      @relation(fields: [patientId], references: [id])
+  encounterId        String?
+  encounter          Encounter?   @relation(fields: [encounterId], references: [id])
+  providerId         String
+  provider           User         @relation(fields: [providerId], references: [id])
+  chiefComplaint     String
+  historyOfPresentIllness String  @db.Text
+  pastMedicalHistory String?      @db.Text
+  pastSurgicalHistory String?     @db.Text
+  socialHistory      String?      @db.Text
+  familyHistory      String?      @db.Text
+  allergies          String?
+  medications        String?      @db.Text
+  reviewOfSystems    String?      @db.Text
+  vitalSigns         Json?
+  physicalExam       String       @db.Text
+  assessment         String       @db.Text
+  plan               String       @db.Text
+  status             NoteStatus   @default(DRAFT)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  isDeleted          Boolean      @default(false)
+  deletedAt          DateTime?
+  auditLogs          AuditLog[]
+
+  @@index([patientId])
+  @@index([encounterId])
+  @@index([providerId])
+  @@index([status])
+}
+
+// Enumerations
+enum ClinicalNoteType {
+  PROGRESS_NOTE
+  ADMISSION_NOTE
+  DISCHARGE_SUMMARY
+  OPERATIVE_REPORT
+  CONSULTATION_NOTE
+  PROCEDURE_NOTE
+  HISTORY_AND_PHYSICAL
+  NURSING_NOTE
+  PHYSICIAN_ORDER
+  REFERRAL_NOTE
+  EMERGENCY_NOTE
+  TRANSFER_NOTE
+  OTHER
+}
+
+enum NoteStatus {
+  DRAFT
+  SIGNED
+  COMPLETED
+  AMENDED
+  ADDENDED
+  RETRACTED
+  DELETED
+}
+
+enum SignatureType {
+  AUTHOR
+  ATTENDING
+  RESIDENT
+  SUPERVISOR
+  CO_SIGNATURE
+  WITNESS
+}
+
+enum DocumentType {
+  HISTORY_AND_PHYSICAL
+  DISCHARGE_SUMMARY
+  OPERATIVE_REPORT
+  PATHOLOGY_REPORT
+  RADIOLOGY_REPORT
+  EKG
+  LABORATORY_RESULT
+  CONSULTATION
+  PATIENT_CONSENT
+  ADVANCE_DIRECTIVE
+  INSURANCE_CARD
+  IDENTIFICATION
+  OTHER
+}
+
+enum FieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  TIME
+  DATETIME
+  DROPDOWN
+  RADIO
+  CHECKBOX
+  MULTI_SELECT
+  ATTACHMENT
+  SIGNATURE
+  CALCULATED
+}
+
+enum DischargeDestination {
+  HOME
+  SKILLED_NURSING_FACILITY
+  REHABILITATION_CENTER
+  LONG_TERM_CARE
+  ANOTHER_HOSPITAL
+  EXPIRED
+  LEFT_AGAINST_MEDICAL_ADVICE
+  OTHER
+}
+
+enum PatientCondition {
+  STABLE
+  IMPROVED
+  CRITICAL
+  EXPIRED
+  UNCHANGED
+  WORSENED
+}

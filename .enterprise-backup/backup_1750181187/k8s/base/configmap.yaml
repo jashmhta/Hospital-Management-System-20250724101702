@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hms-config
+  namespace: hospital-management
+data:
+  # Application Configuration
+  nextauth-url: "https://hms.yourdomain.com"
+  environment: "production"
+  log-level: "info"
+
+  # Feature Flags
+  enable-audit-logging: "true"
+  enable-encryption: "true"
+  enable-mfa: "true"
+  enable-rate-limiting: "true"
+
+  # Cache Configuration
+  cache-ttl: "3600"
+  session-timeout: "1800"
+
+  # Security Configuration
+  password-min-length: "8"
+  password-require-uppercase: "true"
+  password-require-lowercase: "true"
+  password-require-numbers: "true"
+  password-require-symbols: "true"
+  max-login-attempts: "5"
+  lockout-duration: "900"
+
+  # File Upload Configuration
+  max-file-size: "50MB"
+  allowed-file-types: "jpg,jpeg,png,pdf,doc,docx,xls,xlsx"
+
+  # API Configuration
+  api-rate-limit: "1000"
+  api-rate-window: "3600"
+  api-timeout: "30000"
+
+  # Database Configuration
+  db-pool-size: "20"
+  db-timeout: "30000"
+  db-idle-timeout: "600000"
+
+  # Monitoring Configuration
+  metrics-enabled: "true"
+  tracing-enabled: "true"
+  health-check-interval: "30"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hms-secrets
+  namespace: hospital-management
+type: Opaque
+data:
+  # Database
+  database-url: cG9zdGdyZXNxbDovL3Bvc3RncmVzOnBhc3N3b3JkQHBvc3RncmVzLXNlcnZpY2U6NTQzMi9ob3NwaXRhbF9tYW5hZ2VtZW50 # base64 encoded
+
+  # Redis
+  redis-url: cmVkaXM6Ly86cGFzc3dvcmRAcmVkaXMtc2VydmljZTo2Mzc5 # base64 encoded
+
+  # JWT
+  jwt-secret: c3VwZXJfc2VjcmV0X2p3dF9rZXlfaGVyZQ== # base64 encoded
+
+  # NextAuth
+  nextauth-secret: bmV4dGF1dGhfc2VjcmV0X2tleSQ== # base64 encoded
+
+  # Encryption Keys
+  encryption-key: ZW5jcnlwdGlvbl9rZXlfZm9yX3BoaV9kYXRh # base64 encoded
+  encryption-iv: aW5pdGlhbGl6YXRpb25fdmVjdG9y # base64 encoded
+
+  # SMTP Configuration
+  smtp-host: c210cC55b3VyZG9tYWluLmNvbQ== # base64 encoded
+  smtp-port: NTg3 # base64 encoded
+  smtp-user: bm9yZXBseUB5b3VyZG9tYWluLmNvbQ== # base64 encoded
+  smtp-pass: c210cF9wYXNzd29yZA== # base64 encoded
+
+  # OAuth Keys (if needed)
+  google-client-id: Z29vZ2xlX2NsaWVudF9pZA== # base64 encoded
+  google-client-secret: Z29vZ2xlX2NsaWVudF9zZWNyZXQ= # base64 encoded
+
+  # API Keys
+  twilio-sid: dHdpbGlvX3NpZA== # base64 encoded
+  twilio-token: dHdpbGlvX3Rva2Vu # base64 encoded
+
+  # File Storage
+  s3-access-key: czNfYWNjZXNzX2tleQ== # base64 encoded
+  s3-secret-key: czNfc2VjcmV0X2tleQ== # base64 encoded
+  s3-bucket: aG1zLWZpbGVzLWJ1Y2tldA== # base64 encoded
+  s3-region: dXMtZWFzdC0x # base64 encoded
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-config
+  namespace: hospital-management
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+
+    scrape_configs:
+      - job_name: 'hms-web'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - hospital-management
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+      
+      - job_name: 'postgres'
+        static_configs:
+          - targets: ['postgres-service:5432']
+        
+      - job_name: 'redis'
+        static_configs:
+          - targets: ['redis-service:6379']
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager:9093

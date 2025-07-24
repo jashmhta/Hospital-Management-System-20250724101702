@@ -1,0 +1,401 @@
+// Quality Management Schema
+// Supports NABH/JCI accreditation compliance, quality indicators, and assessments
+
+// Quality Indicator - Metrics for monitoring healthcare quality
+model QualityIndicator {
+  id                    String                @id @default(uuid())
+  name                  String
+  description           String?
+  category              String                // Clinical, Patient Safety, Operational, Financial
+  source                String                // jcaho_core_measures, nabh, jci, internal
+  dataSource            String                // manual, automated, integrated
+  numeratorDefinition   String
+  denominatorDefinition String
+  targetValue           Float?
+  targetOperator        String?               // >=, <=, =, >, <
+  frequency             String                // daily, weekly, monthly, quarterly, annually
+  reportingLevel        String                // department, hospital, system
+  status                String                @default("active") // active, inactive, retired
+  
+  // Stratification
+  stratificationCriteria String?              // JSON string for criteria
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  createdBy             String
+  updatedBy             String?
+  
+  // Relations
+  events                QualityEvent[]
+  metrics               QualityMetrics[]
+  assessmentCriteria    AssessmentCriteria[]
+  
+  @@index([category])
+  @@index([source])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Quality Event - Incidents, near misses, and quality-related events
+model QualityEvent {
+  id                    String                @id @default(uuid())
+  eventType             String                // incident, near_miss, adverse_event, sentinel_event
+  title                 String
+  description           String
+  severity              String                // low, medium, high, critical
+  status                String                @default("open") // open, investigating, resolved, closed
+  
+  // Event details
+  patientId             String?
+  departmentId          String?
+  locationId            String?
+  eventDateTime         DateTime
+  reportedDateTime      DateTime              @default(now())
+  reportedBy            String
+  
+  // Classification
+  categoryCode          String?
+  subcategoryCode       String?
+  rootCause             String?
+  contributingFactors   String?               // JSON array
+  
+  // Investigation
+  investigationNotes    String?
+  correctiveActions     String?               // JSON array
+  preventiveActions     String?               // JSON array
+  lessonsLearned        String?
+  
+  // Associated indicators
+  qualityIndicatorId    String?
+  qualityIndicator      QualityIndicator?     @relation(fields: [qualityIndicatorId], references: [id])
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  createdBy             String
+  updatedBy             String?
+  
+  @@index([eventType])
+  @@index([severity])
+  @@index([status])
+  @@index([eventDateTime])
+  @@index([patientId])
+  @@index([departmentId])
+}
+
+// Quality Assessment - NABH/JCI assessments and audits
+model QualityAssessment {
+  id                    String                @id @default(uuid())
+  type                  String                // nabh, jci, internal_audit, peer_review
+  title                 String
+  description           String?
+  scope                 String                // department, hospital, service_line
+  
+  // Assessment details
+  standardVersion       String?
+  assessmentDate        DateTime
+  dueDate               DateTime?
+  completedDate         DateTime?
+  status                String                @default("planned") // planned, in_progress, completed, cancelled
+  
+  // Team
+  leadAssessor          String
+  assessors             String                // JSON array of assessor IDs
+  
+  // Results
+  overallScore          Float?
+  maxScore              Float?
+  overallCompliance     Float?                // Percentage
+  findings              String?               // JSON array of findings
+  recommendations       String?               // JSON array of recommendations
+  
+  // Certification
+  certificationBody     String?
+  certificationStatus   String?               // pending, achieved, expired, suspended
+  certificationDate     DateTime?
+  expiryDate            DateTime?
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  createdBy             String
+  updatedBy             String?
+  
+  // Relations
+  criteria              AssessmentCriteria[]
+  reports               ComplianceReport[]
+  actionPlans           ActionPlan[]
+  
+  @@index([type])
+  @@index([status])
+  @@index([assessmentDate])
+  @@index([certificationStatus])
+}
+
+// Assessment Criteria - Individual criteria within an assessment
+model AssessmentCriteria {
+  id                    String                @id @default(uuid())
+  assessmentId          String
+  assessment            QualityAssessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  
+  criteriaNumber        String                // e.g., "1.1.1", "AQM.1", etc.
+  title                 String
+  requirement           String
+  intent                String?
+  
+  // Scoring
+  score                 Float?
+  maxScore              Float                 @default(100)
+  complianceStatus      String?               // fully_met, partially_met, not_met, not_applicable
+  
+  // Evidence
+  evidence              String?               // JSON array of evidence items
+  observations          String?
+  nonCompliances        String?               // JSON array of non-compliance items
+  
+  // Associated indicator
+  qualityIndicatorId    String?
+  qualityIndicator      QualityIndicator?     @relation(fields: [qualityIndicatorId], references: [id])
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  
+  @@index([assessmentId])
+  @@index([complianceStatus])
+  @@index([criteriaNumber])
+}
+
+// Quality Metrics - Time-series data for quality indicators
+model QualityMetrics {
+  id                    String                @id @default(uuid())
+  indicatorId           String
+  indicator             QualityIndicator      @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  
+  // Time period
+  measurementPeriod     DateTime
+  periodType            String                // daily, weekly, monthly, quarterly, annually
+  
+  // Values
+  numeratorValue        Float
+  denominatorValue      Float
+  rate                  Float?                // Calculated rate (numerator/denominator)
+  targetValue           Float?
+  varianceFromTarget    Float?                // Difference from target
+  
+  // Stratification data
+  stratificationData    String?               // JSON object with stratified values
+  
+  // Data quality
+  dataQualityScore      Float?                // 0-100 score
+  dataCompletenessRate  Float?                // Percentage of complete data
+  dataSource            String                // manual, automated, integrated
+  verificationStatus    String                @default("pending") // pending, verified, rejected
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  enteredBy             String
+  verifiedBy            String?
+  
+  @@index([indicatorId])
+  @@index([measurementPeriod])
+  @@index([periodType])
+  @@index([verificationStatus])
+  @@unique([indicatorId, measurementPeriod, periodType])
+}
+
+// Compliance Report - Formal compliance reporting
+model ComplianceReport {
+  id                    String                @id @default(uuid())
+  assessmentId          String?
+  assessment            QualityAssessment?    @relation(fields: [assessmentId], references: [id])
+  
+  title                 String
+  reportType            String                // nabh, jci, regulatory, internal
+  regulatoryBody        String
+  standard              String
+  reportingPeriod       String
+  
+  // Compliance summary
+  overallCompliance     Float                 // Percentage
+  status                String                // compliant, non_compliant, conditional
+  requirements          String                // JSON array of compliance requirements
+  findings              String?               // JSON array of findings
+  gaps                  String?               // JSON array of identified gaps
+  
+  // Action plan
+  actionPlanId          String?
+  actionPlan            ActionPlan?           @relation(fields: [actionPlanId], references: [id])
+  
+  // Submission
+  submissionDate        DateTime?
+  submittedBy           String?
+  approvalStatus        String                @default("draft") // draft, submitted, approved, rejected
+  approvedBy            String?
+  approvalDate          DateTime?
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  createdBy             String
+  updatedBy             String?
+  
+  @@index([reportType])
+  @@index([regulatoryBody])
+  @@index([status])
+  @@index([submissionDate])
+}
+
+// Action Plan - Corrective and preventive actions
+model ActionPlan {
+  id                    String                @id @default(uuid())
+  title                 String
+  description           String?
+  type                  String                // corrective, preventive, improvement
+  priority              String                // low, medium, high, critical
+  status                String                @default("planning") // planning, approved, in_progress, completed, cancelled
+  
+  // Scope
+  departmentId          String?
+  impactedAreas         String?               // JSON array of affected areas
+  
+  // Timeline
+  targetDate            DateTime
+  startDate             DateTime?
+  completedDate         DateTime?
+  
+  // Ownership
+  ownerId               String                // Primary responsible person
+  teamMembers           String?               // JSON array of team member IDs
+  
+  // Cost
+  estimatedCost         Float?
+  actualCost            Float?
+  budgetApproved        Boolean               @default(false)
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  createdBy             String
+  updatedBy             String?
+  
+  // Relations
+  actionItems           ActionItem[]
+  complianceReports     ComplianceReport[]
+  assessments           QualityAssessment[]
+  
+  @@index([status])
+  @@index([priority])
+  @@index([targetDate])
+  @@index([ownerId])
+}
+
+// Action Item - Individual tasks within an action plan
+model ActionItem {
+  id                    String                @id @default(uuid())
+  actionPlanId          String
+  actionPlan            ActionPlan            @relation(fields: [actionPlanId], references: [id], onDelete: Cascade)
+  
+  title                 String
+  description           String?
+  status                String                @default("not_started") // not_started, in_progress, completed, cancelled, on_hold
+  
+  // Assignment
+  assignedTo            String
+  estimatedHours        Float?
+  actualHours           Float?
+  
+  // Timeline
+  dueDate               DateTime
+  completedDate         DateTime?
+  
+  // Dependencies
+  dependencies          String?               // JSON array of dependent action item IDs
+  blockers              String?               // JSON array of current blockers
+  
+  // Progress
+  progressPercentage    Float                 @default(0)
+  notes                 String?
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  
+  @@index([actionPlanId])
+  @@index([status])
+  @@index([assignedTo])
+  @@index([dueDate])
+}
+
+// Quality Dashboard Configuration
+model QualityDashboard {
+  id                    String                @id @default(uuid())
+  name                  String
+  description           String?
+  type                  String                // executive, departmental, operational
+  
+  // Configuration
+  indicatorIds          String                // JSON array of indicator IDs
+  layout                String                // JSON configuration for dashboard layout
+  refreshInterval       Int                   @default(3600) // Seconds
+  
+  // Access control
+  ownerId               String
+  sharedWith            String?               // JSON array of user/role IDs
+  isPublic              Boolean               @default(false)
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  
+  @@index([type])
+  @@index([ownerId])
+}
+
+// Quality Document - Store quality-related documents
+model QualityDocument {
+  id                    String                @id @default(uuid())
+  title                 String
+  description           String?
+  documentType          String                // policy, procedure, guideline, manual, certificate
+  category              String?               // quality, patient_safety, infection_control, etc.
+  
+  // Document details
+  version               String                @default("1.0")
+  status                String                @default("draft") // draft, active, retired, archived
+  
+  // File information
+  fileName              String
+  fileSize              Int
+  mimeType              String
+  filePath              String
+  checksum              String?               // For integrity verification
+  
+  // Lifecycle
+  effectiveDate         DateTime?
+  expiryDate            DateTime?
+  reviewDate            DateTime?
+  
+  // Approval workflow
+  approvalStatus        String                @default("pending") // pending, approved, rejected
+  approvedBy            String?
+  approvalDate          DateTime?
+  
+  // Tags and classification
+  tags                  String?               // JSON array of tags
+  keywords              String?               // For search
+  
+  // Metadata
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  createdBy             String
+  updatedBy             String?
+  
+  @@index([documentType])
+  @@index([category])
+  @@index([status])
+  @@index([effectiveDate])
+  @@index([tags])
+}

@@ -1,0 +1,375 @@
+server:
+  port: ${SERVER_PORT:8080}
+  netty:
+    connection-timeout: 2s
+    idle-timeout: 15s
+  shutdown: graceful
+
+spring:
+  application:
+    name: api-gateway
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:default}
+
+  main:
+    web-application-type: reactive
+
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 5s
+        pool:
+          type: elastic
+          max-idle-time: 15s
+          max-life-time: 60s
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - AddResponseHeader=X-Response-Default-Foo, Default-Bar
+      globalcors:
+        corsConfigurations:
+          "[/**]":
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # Routes are defined in Java configuration for better type safety
+        # See ApiGatewayApplication.java
+      metrics:
+        enabled: true
+
+    config:
+      enabled: ${CONFIG_SERVER_ENABLED:false}
+      uri: ${CONFIG_SERVER_URI:http://localhost:8888}
+      fail-fast: false
+      retry:
+        initial-interval: 1000
+        max-attempts: 6
+        max-interval: 2000
+
+    circuitbreaker:
+      resilience4j:
+        enabled: true
+
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    database: 1
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/hms}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8080/auth/realms/hms/protocol/openid_connect/certs}
+
+  sleuth:
+    zipkin:
+      base-url: ${ZIPKIN_BASE_URL:http://localhost:9411}
+    sampler:
+      probability: ${SLEUTH_SAMPLE_RATE:0.1}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: "@project.version@"
+      description: "Enterprise API Gateway"
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      patient-management-cb:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+      appointment-scheduling-cb:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+      clinical-notes-cb:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+      billing-cb:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+      auth-cb:
+        register-health-indicator: true
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        permitted-number-of-calls-in-half-open-state: 2
+        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 1s
+      fhir-patient-cb:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 3s
+
+  retry:
+    instances:
+      patient-management:
+        max-attempts: 3
+        wait-duration: 100ms
+        exponential-backoff-multiplier: 2
+        enable-exponential-backoff: true
+      appointment-scheduling:
+        max-attempts: 3
+        wait-duration: 100ms
+        exponential-backoff-multiplier: 2
+        enable-exponential-backoff: true
+      clinical-notes:
+        max-attempts: 3
+        wait-duration: 100ms
+        exponential-backoff-multiplier: 2
+        enable-exponential-backoff: true
+      billing:
+        max-attempts: 3
+        wait-duration: 100ms
+        exponential-backoff-multiplier: 2
+        enable-exponential-backoff: true
+
+  timelimiter:
+    instances:
+      patient-management-cb:
+        timeout-duration: 5s
+        cancel-running-future: true
+      appointment-scheduling-cb:
+        timeout-duration: 5s
+        cancel-running-future: true
+      clinical-notes-cb:
+        timeout-duration: 5s
+        cancel-running-future: true
+      billing-cb:
+        timeout-duration: 5s
+        cancel-running-future: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,gateway,circuitbreakers,ratelimiters
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+    gateway:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+
+info:
+  app:
+    name: "@project.name@"
+    description: "@project.description@"
+    version: "@project.version@"
+    encoding: "@project.build.sourceEncoding@"
+    java:
+      version: "@java.version@"
+
+logging:
+  level:
+    com.hospital.hms: ${LOG_LEVEL:INFO}
+    org.springframework.cloud.gateway: ${GATEWAY_LOG_LEVEL:INFO}
+    org.springframework.security: DEBUG
+    org.springframework.cloud.netflix.eureka: INFO
+    org.springframework.web: INFO
+    io.github.resilience4j: INFO
+    reactor.netty: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: logs/api-gateway.log
+    max-size: 100MB
+    max-history: 30
+
+# OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    urls:
+      - name: Patient Management Service
+        url: /v3/api-docs/patient-management
+      - name: Appointment Scheduling Service
+        url: /v3/api-docs/appointment-scheduling
+      - name: Clinical Notes Service
+        url: /v3/api-docs/clinical-notes
+      - name: Billing Service
+        url: /v3/api-docs/billing
+    config-url: /v3/api-docs/swagger-config
+
+# Security Configuration
+security:
+  jwt:
+    secret: ${JWT_SECRET:defaultSecretKeyForDevelopmentOnlyChangeInProduction}
+    expiration: 86400 # 24 hours in seconds
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS,PATCH
+    allowed-headers: "*"
+    allow-credentials: true
+  rate-limit:
+    enabled: true
+    requests-per-second: 100
+    burst-capacity: 200
+
+# API Gateway Specific Configuration
+gateway:
+  timeout:
+    connect: 2000ms
+    response: 5000ms
+  retry:
+    max-attempts: 3
+    backoff-multiplier: 2
+  circuit-breaker:
+    failure-threshold: 50
+    slow-call-threshold: 50
+    slow-call-duration: 2000ms
+    wait-duration: 30000ms
+  rate-limit:
+    redis-script-name: request_rate_limiter
+    key-resolver: "#{@userKeyResolver}"
+  headers:
+    request:
+      - "X-Forwarded-Host"
+      - "X-Forwarded-Proto"
+      - "X-Forwarded-For"
+      - "X-Real-IP"
+    response:
+      - "X-Response-Time"
+      - "X-Service"
+      - "X-Rate-Limit-Remaining"
+
+# Environment specific configurations
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://service-discovery:8761/eureka
+
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+  cloud:
+    gateway:
+      httpclient:
+        pool:
+          max-connections: 500
+          max-idle-time: 30s
+          max-life-time: 120s
+
+security:
+  rate-limit:
+    requests-per-second: 1000
+    burst-capacity: 2000
+
+logging:
+  level:
+    com.hospital.hms: INFO
+    org.springframework.cloud.gateway: WARN
+    org.springframework.security: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+
+management:
+  endpoint:
+    health:
+      show-details: when-authorized
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,gateway
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      patient-management-cb:
+        wait-duration-in-open-state: 60s
+      appointment-scheduling-cb:
+        wait-duration-in-open-state: 60s
+      clinical-notes-cb:
+        wait-duration-in-open-state: 60s
+      billing-cb:
+        wait-duration-in-open-state: 60s
